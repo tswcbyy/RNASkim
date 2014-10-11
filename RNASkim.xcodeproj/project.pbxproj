@@ -6,6 +6,33 @@
 	objectVersion = 46;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		92CF79CB19E9EA5900D431E2 /* README.md in Sources */ = {isa = PBXBuildFile; fileRef = 92CF799419E9EA5900D431E2 /* README.md */; };
+		92CF79CC19E9EA5900D431E2 /* fa_reader.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF799619E9EA5900D431E2 /* fa_reader.cc */; };
+		92CF79CD19E9EA5900D431E2 /* fa_reader_test.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF799819E9EA5900D431E2 /* fa_reader_test.cc */; };
+		92CF79CE19E9EA5900D431E2 /* karp_robin_hash.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF799919E9EA5900D431E2 /* karp_robin_hash.cc */; };
+		92CF79CF19E9EA5900D431E2 /* karp_robin_hash_test.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF799B19E9EA5900D431E2 /* karp_robin_hash_test.cc */; };
+		92CF79D019E9EA5900D431E2 /* bitmap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF799D19E9EA5900D431E2 /* bitmap.cc */; };
+		92CF79D119E9EA5900D431E2 /* bloom.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF799F19E9EA5900D431E2 /* bloom.cc */; };
+		92CF79D219E9EA5900D431E2 /* MurmurHash3.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79A219E9EA5900D431E2 /* MurmurHash3.cc */; };
+		92CF79D319E9EA5900D431E2 /* sbf.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79A419E9EA5900D431E2 /* sbf.cc */; };
+		92CF79D419E9EA5900D431E2 /* spooky.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79A719E9EA5900D431E2 /* spooky.cc */; };
+		92CF79D519E9EA5900D431E2 /* Makefile in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79AA19E9EA5900D431E2 /* Makefile */; };
+		92CF79D619E9EA5900D431E2 /* rolling_hash_counter.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79B419E9EA5900D431E2 /* rolling_hash_counter.cc */; };
+		92CF79D719E9EA5900D431E2 /* rolling_hash_counter_test.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79B619E9EA5900D431E2 /* rolling_hash_counter_test.cc */; };
+		92CF79D819E9EA5900D431E2 /* rs_bloom.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79B719E9EA5900D431E2 /* rs_bloom.cc */; };
+		92CF79D919E9EA5900D431E2 /* rs_bloom_test.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79B919E9EA5900D431E2 /* rs_bloom_test.cc */; };
+		92CF79DA19E9EA5900D431E2 /* rs_cluster.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79BA19E9EA5900D431E2 /* rs_cluster.cc */; };
+		92CF79DB19E9EA5900D431E2 /* rs_common.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79BB19E9EA5900D431E2 /* rs_common.cc */; };
+		92CF79DC19E9EA5900D431E2 /* rs_common_test.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79BD19E9EA5900D431E2 /* rs_common_test.cc */; };
+		92CF79DD19E9EA5900D431E2 /* rs_count.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79BE19E9EA5900D431E2 /* rs_count.cc */; };
+		92CF79DE19E9EA5900D431E2 /* rs_estimate.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79BF19E9EA5900D431E2 /* rs_estimate.cc */; };
+		92CF79DF19E9EA5900D431E2 /* rs_estimate_lib.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79C019E9EA5900D431E2 /* rs_estimate_lib.cc */; };
+		92CF79E019E9EA5900D431E2 /* rs_index.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79C219E9EA5900D431E2 /* rs_index.cc */; };
+		92CF79E119E9EA5900D431E2 /* rs_select.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79C319E9EA5900D431E2 /* rs_select.cc */; };
+		92CF79E219E9EA5900D431E2 /* stringpiece.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79C519E9EA5900D431E2 /* stringpiece.cc */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		9204CB6319E9E56A0032F114 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -20,6 +47,56 @@
 
 /* Begin PBXFileReference section */
 		9204CB6519E9E56A0032F114 /* RNASkim */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = RNASkim; sourceTree = BUILT_PRODUCTS_DIR; };
+		92CF799219E9EA5900D431E2 /* LICENSE */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		92CF799319E9EA5900D431E2 /* prepare.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; path = prepare.sh; sourceTree = "<group>"; };
+		92CF799419E9EA5900D431E2 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		92CF799619E9EA5900D431E2 /* fa_reader.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = fa_reader.cc; sourceTree = "<group>"; };
+		92CF799719E9EA5900D431E2 /* fa_reader.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fa_reader.h; sourceTree = "<group>"; };
+		92CF799819E9EA5900D431E2 /* fa_reader_test.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = fa_reader_test.cc; sourceTree = "<group>"; };
+		92CF799919E9EA5900D431E2 /* karp_robin_hash.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = karp_robin_hash.cc; sourceTree = "<group>"; };
+		92CF799A19E9EA5900D431E2 /* karp_robin_hash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = karp_robin_hash.h; sourceTree = "<group>"; };
+		92CF799B19E9EA5900D431E2 /* karp_robin_hash_test.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = karp_robin_hash_test.cc; sourceTree = "<group>"; };
+		92CF799D19E9EA5900D431E2 /* bitmap.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bitmap.cc; sourceTree = "<group>"; };
+		92CF799E19E9EA5900D431E2 /* bitmap.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bitmap.h; sourceTree = "<group>"; };
+		92CF799F19E9EA5900D431E2 /* bloom.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bloom.cc; sourceTree = "<group>"; };
+		92CF79A019E9EA5900D431E2 /* bloom.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bloom.h; sourceTree = "<group>"; };
+		92CF79A219E9EA5900D431E2 /* MurmurHash3.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MurmurHash3.cc; sourceTree = "<group>"; };
+		92CF79A319E9EA5900D431E2 /* MurmurHash3.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MurmurHash3.h; sourceTree = "<group>"; };
+		92CF79A419E9EA5900D431E2 /* sbf.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sbf.cc; sourceTree = "<group>"; };
+		92CF79A519E9EA5900D431E2 /* sbf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sbf.h; sourceTree = "<group>"; };
+		92CF79A719E9EA5900D431E2 /* spooky.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = spooky.cc; sourceTree = "<group>"; };
+		92CF79A819E9EA5900D431E2 /* spooky.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = spooky.h; sourceTree = "<group>"; };
+		92CF79A919E9EA5900D431E2 /* likely.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = likely.h; sourceTree = "<group>"; };
+		92CF79AA19E9EA5900D431E2 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		92CF79AC19E9EA5900D431E2 /* customize_download.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = customize_download.py; sourceTree = "<group>"; };
+		92CF79AD19E9EA5900D431E2 /* download.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = download.py; sourceTree = "<group>"; };
+		92CF79AE19E9EA5900D431E2 /* generate_fasta.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = generate_fasta.py; sourceTree = "<group>"; };
+		92CF79AF19E9EA5900D431E2 /* z.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = z.py; sourceTree = "<group>"; };
+		92CF79B019E9EA5900D431E2 /* zleveldb.py */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.python; path = zleveldb.py; sourceTree = "<group>"; };
+		92CF79B219E9EA5900D431E2 /* rnasigs.proto */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = rnasigs.proto; sourceTree = "<group>"; };
+		92CF79B319E9EA5900D431E2 /* proto_data.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = proto_data.h; sourceTree = "<group>"; };
+		92CF79B419E9EA5900D431E2 /* rolling_hash_counter.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rolling_hash_counter.cc; sourceTree = "<group>"; };
+		92CF79B519E9EA5900D431E2 /* rolling_hash_counter.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = rolling_hash_counter.h; sourceTree = "<group>"; };
+		92CF79B619E9EA5900D431E2 /* rolling_hash_counter_test.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rolling_hash_counter_test.cc; sourceTree = "<group>"; };
+		92CF79B719E9EA5900D431E2 /* rs_bloom.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_bloom.cc; sourceTree = "<group>"; };
+		92CF79B819E9EA5900D431E2 /* rs_bloom.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = rs_bloom.h; sourceTree = "<group>"; };
+		92CF79B919E9EA5900D431E2 /* rs_bloom_test.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_bloom_test.cc; sourceTree = "<group>"; };
+		92CF79BA19E9EA5900D431E2 /* rs_cluster.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_cluster.cc; sourceTree = "<group>"; };
+		92CF79BB19E9EA5900D431E2 /* rs_common.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_common.cc; sourceTree = "<group>"; };
+		92CF79BC19E9EA5900D431E2 /* rs_common.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = rs_common.h; sourceTree = "<group>"; };
+		92CF79BD19E9EA5900D431E2 /* rs_common_test.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_common_test.cc; sourceTree = "<group>"; };
+		92CF79BE19E9EA5900D431E2 /* rs_count.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_count.cc; sourceTree = "<group>"; };
+		92CF79BF19E9EA5900D431E2 /* rs_estimate.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_estimate.cc; sourceTree = "<group>"; };
+		92CF79C019E9EA5900D431E2 /* rs_estimate_lib.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_estimate_lib.cc; sourceTree = "<group>"; };
+		92CF79C119E9EA5900D431E2 /* rs_estimate_lib.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = rs_estimate_lib.h; sourceTree = "<group>"; };
+		92CF79C219E9EA5900D431E2 /* rs_index.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_index.cc; sourceTree = "<group>"; };
+		92CF79C319E9EA5900D431E2 /* rs_select.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_select.cc; sourceTree = "<group>"; };
+		92CF79C419E9EA5900D431E2 /* rs_thread.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = rs_thread.h; sourceTree = "<group>"; };
+		92CF79C519E9EA5900D431E2 /* stringpiece.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = stringpiece.cc; sourceTree = "<group>"; };
+		92CF79C619E9EA5900D431E2 /* stringpiece.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = stringpiece.h; sourceTree = "<group>"; };
+		92CF79C819E9EA5900D431E2 /* fa_reader_test.fasta.1 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.man; path = fa_reader_test.fasta.1; sourceTree = "<group>"; };
+		92CF79C919E9EA5900D431E2 /* fa_reader_test.fasta.2 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = fa_reader_test.fasta.2; sourceTree = "<group>"; };
+		92CF79CA19E9EA5900D431E2 /* gene_fasta_example.fa */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = gene_fasta_example.fa; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,7 +113,10 @@
 		9204CB5C19E9E56A0032F114 = {
 			isa = PBXGroup;
 			children = (
-				9204CB6719E9E56A0032F114 /* RNASkim */,
+				92CF799219E9EA5900D431E2 /* LICENSE */,
+				92CF799319E9EA5900D431E2 /* prepare.sh */,
+				92CF799419E9EA5900D431E2 /* README.md */,
+				92CF799519E9EA5900D431E2 /* src */,
 				9204CB6619E9E56A0032F114 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -49,11 +129,106 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		9204CB6719E9E56A0032F114 /* RNASkim */ = {
+		92CF799519E9EA5900D431E2 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				92CF799619E9EA5900D431E2 /* fa_reader.cc */,
+				92CF799719E9EA5900D431E2 /* fa_reader.h */,
+				92CF799819E9EA5900D431E2 /* fa_reader_test.cc */,
+				92CF799919E9EA5900D431E2 /* karp_robin_hash.cc */,
+				92CF799A19E9EA5900D431E2 /* karp_robin_hash.h */,
+				92CF799B19E9EA5900D431E2 /* karp_robin_hash_test.cc */,
+				92CF799C19E9EA5900D431E2 /* libbloomd */,
+				92CF79A919E9EA5900D431E2 /* likely.h */,
+				92CF79AA19E9EA5900D431E2 /* Makefile */,
+				92CF79AB19E9EA5900D431E2 /* prepare */,
+				92CF79B119E9EA5900D431E2 /* proto */,
+				92CF79B319E9EA5900D431E2 /* proto_data.h */,
+				92CF79B419E9EA5900D431E2 /* rolling_hash_counter.cc */,
+				92CF79B519E9EA5900D431E2 /* rolling_hash_counter.h */,
+				92CF79B619E9EA5900D431E2 /* rolling_hash_counter_test.cc */,
+				92CF79B719E9EA5900D431E2 /* rs_bloom.cc */,
+				92CF79B819E9EA5900D431E2 /* rs_bloom.h */,
+				92CF79B919E9EA5900D431E2 /* rs_bloom_test.cc */,
+				92CF79BA19E9EA5900D431E2 /* rs_cluster.cc */,
+				92CF79BB19E9EA5900D431E2 /* rs_common.cc */,
+				92CF79BC19E9EA5900D431E2 /* rs_common.h */,
+				92CF79BD19E9EA5900D431E2 /* rs_common_test.cc */,
+				92CF79BE19E9EA5900D431E2 /* rs_count.cc */,
+				92CF79BF19E9EA5900D431E2 /* rs_estimate.cc */,
+				92CF79C019E9EA5900D431E2 /* rs_estimate_lib.cc */,
+				92CF79C119E9EA5900D431E2 /* rs_estimate_lib.h */,
+				92CF79C219E9EA5900D431E2 /* rs_index.cc */,
+				92CF79C319E9EA5900D431E2 /* rs_select.cc */,
+				92CF79C419E9EA5900D431E2 /* rs_thread.h */,
+				92CF79C519E9EA5900D431E2 /* stringpiece.cc */,
+				92CF79C619E9EA5900D431E2 /* stringpiece.h */,
+				92CF79C719E9EA5900D431E2 /* test_data */,
 			);
-			path = RNASkim;
+			path = src;
+			sourceTree = "<group>";
+		};
+		92CF799C19E9EA5900D431E2 /* libbloomd */ = {
+			isa = PBXGroup;
+			children = (
+				92CF799D19E9EA5900D431E2 /* bitmap.cc */,
+				92CF799E19E9EA5900D431E2 /* bitmap.h */,
+				92CF799F19E9EA5900D431E2 /* bloom.cc */,
+				92CF79A019E9EA5900D431E2 /* bloom.h */,
+				92CF79A119E9EA5900D431E2 /* murmurhash */,
+				92CF79A419E9EA5900D431E2 /* sbf.cc */,
+				92CF79A519E9EA5900D431E2 /* sbf.h */,
+				92CF79A619E9EA5900D431E2 /* spookyhash */,
+			);
+			path = libbloomd;
+			sourceTree = "<group>";
+		};
+		92CF79A119E9EA5900D431E2 /* murmurhash */ = {
+			isa = PBXGroup;
+			children = (
+				92CF79A219E9EA5900D431E2 /* MurmurHash3.cc */,
+				92CF79A319E9EA5900D431E2 /* MurmurHash3.h */,
+			);
+			path = murmurhash;
+			sourceTree = "<group>";
+		};
+		92CF79A619E9EA5900D431E2 /* spookyhash */ = {
+			isa = PBXGroup;
+			children = (
+				92CF79A719E9EA5900D431E2 /* spooky.cc */,
+				92CF79A819E9EA5900D431E2 /* spooky.h */,
+			);
+			path = spookyhash;
+			sourceTree = "<group>";
+		};
+		92CF79AB19E9EA5900D431E2 /* prepare */ = {
+			isa = PBXGroup;
+			children = (
+				92CF79AC19E9EA5900D431E2 /* customize_download.py */,
+				92CF79AD19E9EA5900D431E2 /* download.py */,
+				92CF79AE19E9EA5900D431E2 /* generate_fasta.py */,
+				92CF79AF19E9EA5900D431E2 /* z.py */,
+				92CF79B019E9EA5900D431E2 /* zleveldb.py */,
+			);
+			path = prepare;
+			sourceTree = "<group>";
+		};
+		92CF79B119E9EA5900D431E2 /* proto */ = {
+			isa = PBXGroup;
+			children = (
+				92CF79B219E9EA5900D431E2 /* rnasigs.proto */,
+			);
+			path = proto;
+			sourceTree = "<group>";
+		};
+		92CF79C719E9EA5900D431E2 /* test_data */ = {
+			isa = PBXGroup;
+			children = (
+				92CF79C819E9EA5900D431E2 /* fa_reader_test.fasta.1 */,
+				92CF79C919E9EA5900D431E2 /* fa_reader_test.fasta.2 */,
+				92CF79CA19E9EA5900D431E2 /* gene_fasta_example.fa */,
+			);
+			path = test_data;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -112,6 +287,30 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				92CF79DB19E9EA5900D431E2 /* rs_common.cc in Sources */,
+				92CF79D419E9EA5900D431E2 /* spooky.cc in Sources */,
+				92CF79CE19E9EA5900D431E2 /* karp_robin_hash.cc in Sources */,
+				92CF79DC19E9EA5900D431E2 /* rs_common_test.cc in Sources */,
+				92CF79D819E9EA5900D431E2 /* rs_bloom.cc in Sources */,
+				92CF79E019E9EA5900D431E2 /* rs_index.cc in Sources */,
+				92CF79D319E9EA5900D431E2 /* sbf.cc in Sources */,
+				92CF79D519E9EA5900D431E2 /* Makefile in Sources */,
+				92CF79D619E9EA5900D431E2 /* rolling_hash_counter.cc in Sources */,
+				92CF79D219E9EA5900D431E2 /* MurmurHash3.cc in Sources */,
+				92CF79DA19E9EA5900D431E2 /* rs_cluster.cc in Sources */,
+				92CF79D919E9EA5900D431E2 /* rs_bloom_test.cc in Sources */,
+				92CF79CD19E9EA5900D431E2 /* fa_reader_test.cc in Sources */,
+				92CF79D019E9EA5900D431E2 /* bitmap.cc in Sources */,
+				92CF79DF19E9EA5900D431E2 /* rs_estimate_lib.cc in Sources */,
+				92CF79E219E9EA5900D431E2 /* stringpiece.cc in Sources */,
+				92CF79CF19E9EA5900D431E2 /* karp_robin_hash_test.cc in Sources */,
+				92CF79DD19E9EA5900D431E2 /* rs_count.cc in Sources */,
+				92CF79D119E9EA5900D431E2 /* bloom.cc in Sources */,
+				92CF79CB19E9EA5900D431E2 /* README.md in Sources */,
+				92CF79D719E9EA5900D431E2 /* rolling_hash_counter_test.cc in Sources */,
+				92CF79E119E9EA5900D431E2 /* rs_select.cc in Sources */,
+				92CF79DE19E9EA5900D431E2 /* rs_estimate.cc in Sources */,
+				92CF79CC19E9EA5900D431E2 /* fa_reader.cc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
