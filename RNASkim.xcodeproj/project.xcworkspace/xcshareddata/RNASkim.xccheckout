@@ -8,25 +8,25 @@
 	<string>190FDBAA-AFB2-45EA-B0CE-38446EB78E2F</string>
 	<key>IDESourceControlProjectOriginsDictionary</key>
 	<dict>
-		<key>355e44c7-d967-1408-7fcf-ce57b7db7bff</key>
+		<key>C99958041BEA750EE367C38B69E1D9B77FE556D5</key>
 		<string>https://github.com/tswcbyy/RNASkim</string>
 	</dict>
 	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
 	<dict>
-		<key>355e44c7-d967-1408-7fcf-ce57b7db7bff</key>
-		<string>RNASkim/</string>
+		<key>C99958041BEA750EE367C38B69E1D9B77FE556D5</key>
+		<string>RNASkim</string>
 	</dict>
 	<key>IDESourceControlProjectVersion</key>
 	<integer>111</integer>
 	<key>IDESourceControlProjectWCCIdentifier</key>
-	<string>355e44c7-d967-1408-7fcf-ce57b7db7bff</string>
+	<string>C99958041BEA750EE367C38B69E1D9B77FE556D5</string>
 	<key>IDESourceControlProjectWCConfigurations</key>
 	<array>
 		<dict>
 			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
 			<string>public.vcs.subversion</string>
 			<key>IDESourceControlWCCIdentifierKey</key>
-			<string>355e44c7-d967-1408-7fcf-ce57b7db7bff</string>
+			<string>C99958041BEA750EE367C38B69E1D9B77FE556D5</string>
 			<key>IDESourceControlWCCName</key>
 			<string>RNASkim</string>
 		</dict>
