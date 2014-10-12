@@ -47,7 +47,7 @@ namespace rs {
           new ::google::protobuf::uint8[buffer_size];
       map<string, double> profile;
       map<string, int> tid2length;
-      map<string, double> tid2theta; //theta->at(tid) is number of occurrences of sig-mers from tid
+      map<string, int> tid2theta; //theta->at(tid) is number of occurrences of sig-mers from tid
       while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
         // a table from a transcript id to a vector of estimated
         // abundunce values.
@@ -74,7 +74,7 @@ namespace rs {
         LOG_IF(ERROR, sk.tids_size() > 100) << "Start EM";
         if (run_em) {
           vector<double> pi(sk.tids_size(), 1.0 / sk.tids_size());
-          //theta->at(tid) is number of occurrences of sig-mers from tid
+          //theta->at(tid) is expected number of occurrences of sig-mers from tid after EM
           EM(sk.tids_size(), db, &density_per_tid, &pi, &theta);
           // bool penalized_run = false;
           // vector<double>  penalty(sk.tids_size(), 1);
@@ -100,7 +100,8 @@ namespace rs {
           // }
         }
         for (int j = 0; j < sk.tids_size(); j++) {
-          tid2theta[sk.tids(j)] = theta[j];
+          //round to the nearest integer
+          tid2theta[sk.tids(j)] = int(theta[j]+0.5);
         }
         vector<double> num_reads(sk.tids_size(), 0);
         for (int j = 0; j < sk.tids_size(); j++) {
@@ -137,7 +138,7 @@ namespace rs {
         double rpkm = 0;
         double tpm = 0;
         int length = 0;
-        double theta = 0;
+        int theta = 0;
         if (tid2length.find(iter.first) != tid2length.end()) {
           rpkm = iter.second / (tid2length[iter.first] / 1000.0) / (estimated_total_reads / 1000000.0);
           // the sum of tpm is 1 million

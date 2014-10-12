@@ -256,7 +256,7 @@ namespace rs{
       if (niter > 500000) break;
       // LOG_IF(ERROR, num_tids > 100) << niter;
     }
-    //theta->at(tid) is number of occurrences of sig-mers from tid
+    //theta->at(tid) is expected number of occurrences of sig-mers from tid after EM
     for (int tid = 0; tid < num_tids; tid++) {
         theta->at(tid) = count_per_tid->at(tid);
     }
