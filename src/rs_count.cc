@@ -257,9 +257,9 @@ int main(int argc, char *argv[]) {
     FLAGS_num_threads = 1;
   }
   LOG(INFO) << "Using " << FLAGS_num_threads << " threads...";
-  if (FLAGS_run_em) {
-    LOG(INFO) << "Run EM algorithm at another thread";
-  }
+//  if (FLAGS_run_em) {
+//    LOG(INFO) << "Run EM algorithm at another thread";
+//  }
   rs::CountMain cm(FLAGS_selected_keys_file, FLAGS_read_files1,
                    FLAGS_read_files2, FLAGS_num_threads);
   cm.run();
