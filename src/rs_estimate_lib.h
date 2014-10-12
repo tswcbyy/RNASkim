@@ -19,7 +19,7 @@ namespace rs {
   typedef map<vector<double>, SignatureInfo> SignatureInfoDB;
 
   void EM(int num_tids, const SignatureInfoDB& db,
-          vector<double>* count_per_tid, vector<double>* pi);
+          vector<double>* count_per_tid, vector<double>* pi, vector<double>* theta);
 
   bool prepare_SignatureInfoDB(const SelectedKey &sk, SignatureInfoDB *db);
 } // namesapce
