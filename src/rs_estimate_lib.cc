@@ -153,10 +153,11 @@ namespace rs{
   }
 
   void EM(int num_tids, const SignatureInfoDB& db,
-          vector<double>* count_per_tid, vector<double>* pi) {
+          vector<double>* count_per_tid, vector<double>* pi, vector<double>* theta) {
     vector<double> new_pi;
     int niter = 0;
     count_per_tid->resize(num_tids, 0);
+    theta->resize(num_tids, 0);
     vector<double> num_kmers(num_tids, 0);
     // if has_weight[key_id][0] is tid, it means the tid contains
     // the key_id. The spars
@@ -254,6 +255,10 @@ namespace rs{
       niter ++;
       if (niter > 500000) break;
       // LOG_IF(ERROR, num_tids > 100) << niter;
+    }
+    //theta->at(tid) is number of occurrences of sig-mers from tid
+    for (int tid = 0; tid < num_tids; tid++) {
+        theta->at(tid) = count_per_tid->at(tid);
     }
     for (int tid = 0; tid < num_tids; tid++) {
       if (num_kmers[tid] != 0)

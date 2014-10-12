@@ -47,6 +47,7 @@ namespace rs {
           new ::google::protobuf::uint8[buffer_size];
       map<string, double> profile;
       map<string, int> tid2length;
+      map<string, int> tid2theta; //theta->at(tid) is number of occurrences of sig-mers from tid
       while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
         // a table from a transcript id to a vector of estimated
         // abundunce values.
@@ -72,7 +73,8 @@ namespace rs {
         LOG_IF(ERROR, sk.tids_size() > 100) << "Start EM";
         if (run_em) {
           vector<double> pi(sk.tids_size(), 1.0 / sk.tids_size());
-          EM(sk.tids_size(), db, &density_per_tid, &pi);
+          //theta->at(tid) is number of occurrences of sig-mers from tid
+          EM(sk.tids_size(), db, &density_per_tid, &pi, &theta);
           // bool penalized_run = false;
           // vector<double>  penalty(sk.tids_size(), 1);
           // for (int i = 0; i < (int) covered_transcripts.size(); i++) {
@@ -97,6 +99,9 @@ namespace rs {
           // }
         }
         vector<double> num_reads(sk.tids_size(), 0);
+        for (int j = 0; j < sk.tids_size(); j++) {
+          tid2theta[sk.tids(j)] = theta[j];
+        }
         for (int j = 0; j < sk.tids_size(); j++) {
           num_reads[j] = density_per_tid[j] * (sk.lengths(j));
         }
@@ -136,8 +141,9 @@ namespace rs {
           // the sum of tpm is 1 million
           tpm = iter.second / tid2length[iter.first] / estimated_total_abundance * 1000000;
           length = tid2length[iter.first];
+          theta = tid2theta[iter.first];
         }
-        std::cout << iter.first << '\t' << length << '\t'
+        std::cout << iter.first << '\t' << length << '\t' << theta << '\t'
                   << iter.second << '\t' << rpkm << '\t' << tpm << std::endl;
         // for (auto v : iter.second) {
         //   cout << v << '\t';
