@@ -41,8 +41,8 @@ DEFINE_string(read_files2, "",
               "The fasta read files, splitted by ','");
 DEFINE_int32(rs_length, 40,
            "The length of the sig-mer.");
-DEFINE_bool(run_em, false,
-           "Whether to run EM when counting.");
+//DEFINE_bool(run_em, false,
+//           "Whether to run EM when counting.");
 DEFINE_bool(fastq, false,
            "Whether the data is fastq format");
 
@@ -95,71 +95,71 @@ private:
 };
 
 // This should be only one thread
-class EMThread : public ThreadInterface {
-public:
-  EMThread(const RollingHashCounter* counter,
-           vector<SelectedKey>* selected_keys,
-           std::atomic<bool>* is_running)
-    : selected_keys_(selected_keys), counter_(counter),
-      is_running_(is_running) {
-    pi_.resize(selected_keys->size());
-  }
-  void run_em() {
-    for (size_t i = 0; i < selected_keys_->size(); i++) {
-      SignatureInfoDB db;
-      SelectedKey& sk = selected_keys_->at(i);
-      update_SelectedKey(*counter_, &sk);
-      if (prepare_SignatureInfoDB(sk, &db)) {
-        if (pi_[i].size() == 0) {
-          pi_[i].resize(sk.tids_size(), 1.0 / sk.tids_size());
-        }
-        vector<double> count_per_tid;
-        EM(sk.tids_size(), db, &count_per_tid, &pi_[i]);
-        for (int j = 0; j < sk.tids_size(); j++) {
-          profile_[sk.tids(j)] = count_per_tid[j] * sk.lengths(j);
-        }
-      }
-      if (!(*is_running_)){
-        break;
-      }
-    }
-  }
-  void run() {
-    while (*is_running_) {
-      int tick = 0;
-      // wake up every second to see whether the counting threads are running.
-      while (*is_running_) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        tick ++;
-        if (tick > 10) break;
-      }
-      if (*is_running_)
-        run_em();
-    }
-    run_em();
-  }
-  void dump_result() {
-    map<string, int> tid2length;
-    for (size_t i = 0; i < selected_keys_->size(); i++) {
-      SelectedKey& sk = selected_keys_->at(i);
-      tid2length[sk.tids(i)] = sk.lengths(i);
-    }
-    for (auto iter : profile_) {
-      double rpkm = 0;
-      if (tid2length.find(iter.first) != tid2length.end()) {
-        rpkm = iter.second / tid2length[iter.first];
-      }
-      std::cout << iter.first << '\t' << iter.second
-                << '\t' << rpkm << std::endl;
-    }
-  }
-private:
-  vector<SelectedKey>* selected_keys_;
-  const RollingHashCounter* counter_;
-  vector<vector<double> > pi_;
-  map<string, double> profile_;
-  std::atomic<bool>* is_running_;
-};
+//class EMThread : public ThreadInterface {
+//public:
+//  EMThread(const RollingHashCounter* counter,
+//           vector<SelectedKey>* selected_keys,
+//           std::atomic<bool>* is_running)
+//    : selected_keys_(selected_keys), counter_(counter),
+//      is_running_(is_running) {
+//    pi_.resize(selected_keys->size());
+//  }
+//  void run_em() {
+//    for (size_t i = 0; i < selected_keys_->size(); i++) {
+//      SignatureInfoDB db;
+//      SelectedKey& sk = selected_keys_->at(i);
+//      update_SelectedKey(*counter_, &sk);
+//      if (prepare_SignatureInfoDB(sk, &db)) {
+//        if (pi_[i].size() == 0) {
+//          pi_[i].resize(sk.tids_size(), 1.0 / sk.tids_size());
+//        }
+//        vector<double> count_per_tid;
+//        EM(sk.tids_size(), db, &count_per_tid, &pi_[i]);
+//        for (int j = 0; j < sk.tids_size(); j++) {
+//          profile_[sk.tids(j)] = count_per_tid[j] * sk.lengths(j);
+//        }
+//      }
+//      if (!(*is_running_)){
+//        break;
+//      }
+//    }
+//  }
+//  void run() {
+//    while (*is_running_) {
+//      int tick = 0;
+//      // wake up every second to see whether the counting threads are running.
+//      while (*is_running_) {
+//        std::this_thread::sleep_for(std::chrono::seconds(1));
+//        tick ++;
+//        if (tick > 10) break;
+//      }
+//      if (*is_running_)
+//        run_em();
+//    }
+//    run_em();
+//  }
+//  void dump_result() {
+//    map<string, int> tid2length;
+//    for (size_t i = 0; i < selected_keys_->size(); i++) {
+//      SelectedKey& sk = selected_keys_->at(i);
+//      tid2length[sk.tids(i)] = sk.lengths(i);
+//    }
+//    for (auto iter : profile_) {
+//      double rpkm = 0;
+//      if (tid2length.find(iter.first) != tid2length.end()) {
+//        rpkm = iter.second / tid2length[iter.first];
+//      }
+//      std::cout << iter.first << '\t' << iter.second
+//                << '\t' << rpkm << std::endl;
+//    }
+//  }
+//private:
+//  vector<SelectedKey>* selected_keys_;
+//  const RollingHashCounter* counter_;
+//  vector<vector<double> > pi_;
+//  map<string, double> profile_;
+//  std::atomic<bool>* is_running_;
+//};
 
 class CountMain {
 public:
@@ -216,25 +216,25 @@ public:
       threads[i] = std::thread{RSThread(&count_thread)};
     }
     std::atomic<bool> is_running (true);
-    EMThread em_thread(&counter, &selected_keys_for_em, &is_running);
-    std::thread em;
-    if (FLAGS_run_em) {
-      em = std::thread{RSThread(&em_thread)};
-    }
+//    EMThread em_thread(&counter, &selected_keys_for_em, &is_running);
+//    std::thread em;
+//    if (FLAGS_run_em) {
+//      em = std::thread{RSThread(&em_thread)};
+//    }
     barrier(threads);
-    if (FLAGS_run_em) {
-      is_running = false;
-      LOG(INFO) << "Notify other thread the counting is done.";
-    }
+//    if (FLAGS_run_em) {
+//      is_running = false;
+//      LOG(INFO) << "Notify other thread the counting is done.";
+//    }
     LOG(INFO) << "Dumping the results ...";
     fstream ostream(FLAGS_count_file, ios::out | ios::binary | ios::trunc);
     for (auto& sk : selected_keys) {
       update_SelectedKey(counter, &sk);
       write_protobuf_data(&ostream, &sk);
     }
-    if (FLAGS_run_em) {
-      em.join();
-      em_thread.dump_result();
+//    if (FLAGS_run_em) {
+//      em.join();
+//      em_thread.dump_result();
     }
     counter.dump_info();
     delete[] buffer;
