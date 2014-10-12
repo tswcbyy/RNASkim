@@ -70,6 +70,7 @@ namespace rs {
 
         vector<vector<int> > covered_transcripts; // = find_covered_transcript(db, sk.tids_size());
         vector<double> density_per_tid(sk.tids_size());
+        vector<double> theta(sk.tids_size());
         LOG_IF(ERROR, sk.tids_size() > 100) << "Start EM";
         if (run_em) {
           vector<double> pi(sk.tids_size(), 1.0 / sk.tids_size());
