@@ -235,7 +235,7 @@ public:
 //    if (FLAGS_run_em) {
 //      em.join();
 //      em_thread.dump_result();
-    }
+//    }
     counter.dump_info();
     delete[] buffer;
   }
