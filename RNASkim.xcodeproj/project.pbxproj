@@ -31,7 +31,7 @@
 		92CF79E019E9EA5900D431E2 /* rs_index.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79C219E9EA5900D431E2 /* rs_index.cc */; };
 		92CF79E119E9EA5900D431E2 /* rs_select.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79C319E9EA5900D431E2 /* rs_select.cc */; };
 		92CF79E219E9EA5900D431E2 /* stringpiece.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92CF79C519E9EA5900D431E2 /* stringpiece.cc */; };
-		92D080A819EAF865008F7824 /* rs_gibbs.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 92D080A719EAF865008F7824 /* rs_gibbs.cpp */; };
+		92D080AA19EB7AA7008F7824 /* rs_gibbs.cc in Sources */ = {isa = PBXBuildFile; fileRef = 92D080A919EB7AA7008F7824 /* rs_gibbs.cc */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -98,7 +98,7 @@
 		92CF79C819E9EA5900D431E2 /* fa_reader_test.fasta.1 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.man; path = fa_reader_test.fasta.1; sourceTree = "<group>"; };
 		92CF79C919E9EA5900D431E2 /* fa_reader_test.fasta.2 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = fa_reader_test.fasta.2; sourceTree = "<group>"; };
 		92CF79CA19E9EA5900D431E2 /* gene_fasta_example.fa */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = gene_fasta_example.fa; sourceTree = "<group>"; };
-		92D080A719EAF865008F7824 /* rs_gibbs.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_gibbs.cpp; sourceTree = "<group>"; };
+		92D080A919EB7AA7008F7824 /* rs_gibbs.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = rs_gibbs.cc; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +134,7 @@
 		92CF799519E9EA5900D431E2 /* src */ = {
 			isa = PBXGroup;
 			children = (
+				92D080A919EB7AA7008F7824 /* rs_gibbs.cc */,
 				92CF799619E9EA5900D431E2 /* fa_reader.cc */,
 				92CF799719E9EA5900D431E2 /* fa_reader.h */,
 				92CF799819E9EA5900D431E2 /* fa_reader_test.cc */,
@@ -166,7 +167,6 @@
 				92CF79C519E9EA5900D431E2 /* stringpiece.cc */,
 				92CF79C619E9EA5900D431E2 /* stringpiece.h */,
 				92CF79C719E9EA5900D431E2 /* test_data */,
-				92D080A719EAF865008F7824 /* rs_gibbs.cpp */,
 			);
 			path = src;
 			sourceTree = "<group>";
@@ -299,7 +299,6 @@
 				92CF79D319E9EA5900D431E2 /* sbf.cc in Sources */,
 				92CF79D519E9EA5900D431E2 /* Makefile in Sources */,
 				92CF79D619E9EA5900D431E2 /* rolling_hash_counter.cc in Sources */,
-				92D080A819EAF865008F7824 /* rs_gibbs.cpp in Sources */,
 				92CF79D219E9EA5900D431E2 /* MurmurHash3.cc in Sources */,
 				92CF79DA19E9EA5900D431E2 /* rs_cluster.cc in Sources */,
 				92CF79D919E9EA5900D431E2 /* rs_bloom_test.cc in Sources */,
@@ -308,6 +307,7 @@
 				92CF79DF19E9EA5900D431E2 /* rs_estimate_lib.cc in Sources */,
 				92CF79E219E9EA5900D431E2 /* stringpiece.cc in Sources */,
 				92CF79CF19E9EA5900D431E2 /* karp_robin_hash_test.cc in Sources */,
+				92D080AA19EB7AA7008F7824 /* rs_gibbs.cc in Sources */,
 				92CF79DD19E9EA5900D431E2 /* rs_count.cc in Sources */,
 				92CF79D119E9EA5900D431E2 /* bloom.cc in Sources */,
 				92CF79CB19E9EA5900D431E2 /* README.md in Sources */,

@@ -49,7 +49,6 @@ namespace rs {
       map<string, int> tid2length;
       map<string, int> tid2theta; //theta->at(tid) is number of occurrences of sig-mers from tid
       while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
-          std::count << sk.gid() << endl;
         // a table from a transcript id to a vector of estimated
         // abundunce values.
 

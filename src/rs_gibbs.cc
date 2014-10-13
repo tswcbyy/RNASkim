@@ -23,8 +23,8 @@ namespace rs {
             num_replicates_ = num_repicates;
             em_file_prefix_ = em_file_prefix;
             for (int i = 0; i < num_replicates_; ++i) {
-                string em_file = em_file_prefix_ + i + "_em";
-                
+                string em_file = em_file_prefix_ + std::to_string(i) + "_em";
+                std::cout << em_file << std::endl;
             }
         }
     private:
