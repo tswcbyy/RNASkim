@@ -12,7 +12,7 @@ namespace rs {
     // Total number of counts in the read data
     int total_counts;
     // The number of current k-mer class, e.g., if two k-mers both
-    // show up in the same set of transcripts, this should be two.
+    // show up in the same set of transcripts and have the same counts, this should be two.
     int occurences;
   };
 
