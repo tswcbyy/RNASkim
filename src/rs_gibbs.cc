@@ -10,6 +10,8 @@
 using std::string;
 using std::vector;
 using std::map;
+using std::cout;
+using std::endl;
 
 DEFINE_int32(num_replicates, 4,
              "The number of replicates in this condition.");
@@ -24,8 +26,12 @@ namespace rs {
             em_file_prefix_ = em_file_prefix;
             for (int i = 0; i < num_replicates_; ++i) {
                 string em_file = em_file_prefix_ + std::to_string(i) + "_em";
-                std::cout << em_file << std::endl;
+                cout << em_file << endl;
             }
+        }
+        
+        void run(){
+            cout << "done" << endl;
         }
     private:
         int num_replicates_; //R_c
