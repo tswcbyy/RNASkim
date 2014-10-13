@@ -48,6 +48,6 @@ namespace rs {
 
 int main(int argc, char *argv[]) {
     google::ParseCommandLineFlags(&argc, &argv, true);
-    rs::GibbsSampler gs(FLAGS_num_replicates, FLAGS_em_file);
+    rs::GibbsSampler gs(FLAGS_num_replicates, FLAGS_em_file_prefix);
     gs.run();
 }
