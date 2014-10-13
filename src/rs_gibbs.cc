@@ -1,7 +1,9 @@
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <map>
+#include <sstream>
 
 #include "gflags/gflags.h"
 
@@ -12,6 +14,10 @@ using std::vector;
 using std::map;
 using std::cout;
 using std::endl;
+using std::fstream;
+using std::ios;
+using std::istringstream;
+using std::istream_iterator;
 
 DEFINE_int32(num_replicates, 4,
              "The number of replicates in this condition.");
@@ -25,8 +31,26 @@ namespace rs {
             num_replicates_ = num_repicates;
             em_file_prefix_ = em_file_prefix;
             for (int i = 0; i < num_replicates_; ++i) {
-                string em_file = em_file_prefix_ + std::to_string(i) + "_em";
-                cout << em_file << endl;
+                string em_file = em_file_prefix_ + std::to_string(i+1) + "_em";
+                fstream istream(em_file, ios::in);
+                string line;
+                int t = 0;
+                while (getline(istream, line)) {
+                    istringstream iss(line);
+                    vector<string> tokens{istream_iterator<string>{iss},
+                        istream_iterator<string>{}};
+                    int occ = atoi(tokens[2].c_str());
+                    theta[i][t] = occ;
+                    ++t;
+                }
+                num_trans = t;
+            }
+            for (int i = 0; i < num_replicates_; ++i) {
+                cout << i << endl;
+                for (int t = 0; i < num_trans; ++t) {
+                    cout << theta[i][t] << " ";
+                }
+                cout << endl;
             }
         }
         
