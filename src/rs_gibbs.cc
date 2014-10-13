@@ -29,6 +29,9 @@ namespace rs {
         GibbsSampler(const int num_repicates, const string em_file_prefix){
             num_replicates_ = num_repicates;
             em_file_prefix_ = em_file_prefix;
+            
+            //read theta from EM results
+            theta.resize(num_replicates_);
             vector<int> elem;
             string em_file = em_file_prefix_ + "1_em";
             fstream istream(em_file, ios::in);
@@ -39,7 +42,20 @@ namespace rs {
                 elem.push_back(occ);
             }
             num_trans = elem.size();
-            theta.push_back(elem);
+            theta[0] = elem;
+            
+            //map from the order of transcripts to their tids
+            order2tid.resize(num_trans);
+            fstream is(em_file, ios::in);
+            int t = 0;
+            while (getline(is, line)) {
+                vector<string> tokens = split(line, '\t');
+                string tid = tokens[0];
+                order2tid[t] = tid;
+                ++t;
+            }
+            
+            //read theta from EM results (cont)
             for (int i = 1; i < num_replicates_; ++i) {
                 vector<int> elem(num_trans);
                 string em_file = em_file_prefix_ + std::to_string(i+1) + "_em";
@@ -52,8 +68,16 @@ namespace rs {
                     elem[t] = occ;
                     ++t;
                 }
-                theta.push_back(elem);
+                theta[i] = elem;
             }
+            
+            //check the correntness of order2tid mapping
+            for (int t = 0; t < num_trans; ++t) {
+                cout << order2tid[t] << " ";
+            }
+            cout << endl;
+            
+            // check the correctness of reading theta from EM results
             for (int i = 0; i < num_replicates_; ++i) {
                 cout << i << endl;
                 cout << theta[i].size() << endl;
@@ -62,6 +86,7 @@ namespace rs {
                 }
                 cout << endl;
             }
+            
         }
         
         vector<string> split(const string &s, char delim) {
@@ -82,7 +107,7 @@ namespace rs {
         string em_file_prefix_;
         int num_trans; //T
         vector<int> num_sigmers; //L
-        
+        vector<string> order2tid;
         vector<double> mean; //m
         vector<vector<int>> theta;
         map<SelectedKey_Key, int> parent; //G
