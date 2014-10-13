@@ -29,18 +29,30 @@ namespace rs {
         GibbsSampler(const int num_repicates, const string em_file_prefix){
             num_replicates_ = num_repicates;
             em_file_prefix_ = em_file_prefix;
-            for (int i = 0; i < num_replicates_; ++i) {
+            vector<int> elem;
+            string em_file = em_file_prefix_ + "1_em";
+            fstream istream(em_file, ios::in);
+            string line;
+            int t = 0;
+            while (getline(istream, line)) {
+                vector<string> tokens = split(line, '\t');
+                int occ = atoi(tokens[2].c_str());
+                elem.push_back(occ);
+                ++t;
+            }
+            num_trans = t;
+            theta.push_back(elem);
+            for (int i = 1; i < num_replicates_; ++i) {
+                vector<int> elem(num_trans);
                 string em_file = em_file_prefix_ + std::to_string(i+1) + "_em";
                 fstream istream(em_file, ios::in);
                 string line;
-                int t = 0;
                 while (getline(istream, line)) {
                     vector<string> tokens = split(line, '\t');
                     int occ = atoi(tokens[2].c_str());
-                    theta[i][t] = occ;
-                    ++t;
+                    elem.push_back(occ);
                 }
-                num_trans = t;
+                theta.push_back(elem);
             }
             for (int i = 0; i < num_replicates_; ++i) {
                 cout << i << endl;
@@ -71,7 +83,7 @@ namespace rs {
         vector<int> num_sigmers; //L
         
         vector<double> mean; //m
-        vector<vector<double>> theta;
+        vector<vector<int>> theta;
         map<SelectedKey_Key, int> parent; //G
         
     };
