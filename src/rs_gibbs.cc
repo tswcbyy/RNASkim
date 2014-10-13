@@ -16,8 +16,7 @@ using std::cout;
 using std::endl;
 using std::fstream;
 using std::ios;
-using std::istringstream;
-using std::istream_iterator;
+using std::stringstream;
 
 DEFINE_int32(num_replicates, 4,
              "The number of replicates in this condition.");
@@ -36,9 +35,7 @@ namespace rs {
                 string line;
                 int t = 0;
                 while (getline(istream, line)) {
-                    istringstream iss(line);
-                    vector<string> tokens{istream_iterator<string>{iss},
-                        istream_iterator<string>{}};
+                    vector<string> tokens = split(line, '\t');
                     int occ = atoi(tokens[2].c_str());
                     theta[i][t] = occ;
                     ++t;
@@ -52,6 +49,16 @@ namespace rs {
                 }
                 cout << endl;
             }
+        }
+        
+        vector<string> split(const string &s, char delim) {
+            vector<string> elems;
+            stringstream ss(s);
+            string item;
+            while (getline(ss, item, delim)) {
+                elems.push_back(item);
+            }
+            return elems;
         }
         
         void run(){
