@@ -33,30 +33,31 @@ namespace rs {
             string em_file = em_file_prefix_ + "1_em";
             fstream istream(em_file, ios::in);
             string line;
-            int t = 0;
             while (getline(istream, line)) {
                 vector<string> tokens = split(line, '\t');
                 int occ = atoi(tokens[2].c_str());
                 elem.push_back(occ);
-                ++t;
             }
-            num_trans = t;
+            num_trans = elem.size();
             theta.push_back(elem);
             for (int i = 1; i < num_replicates_; ++i) {
                 vector<int> elem(num_trans);
                 string em_file = em_file_prefix_ + std::to_string(i+1) + "_em";
                 fstream istream(em_file, ios::in);
                 string line;
+                int t = 0;
                 while (getline(istream, line)) {
                     vector<string> tokens = split(line, '\t');
                     int occ = atoi(tokens[2].c_str());
-                    elem.push_back(occ);
+                    elem[t] = occ;
+                    ++t;
                 }
                 theta.push_back(elem);
             }
             for (int i = 0; i < num_replicates_; ++i) {
                 cout << i << endl;
-                for (int t = 0; i < num_trans; ++t) {
+                cout << theta[i].size() << endl;
+                for (int t = 0; t < num_trans; ++t) {
                     cout << theta[i][t] << " ";
                 }
                 cout << endl;
