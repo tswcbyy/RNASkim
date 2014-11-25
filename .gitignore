@@ -51,3 +51,6 @@ third_party/
 
 # python
 *.pyc
+RNASkim.xcodeproj/project.xcworkspace/xcuserdata/jxjzhang.xcuserdatad/UserInterfaceState.xcuserstate
+RNASkim.xcodeproj/xcuserdata/jxjzhang.xcuserdatad/xcschemes/RNASkim.xcscheme
+RNASkim.xcodeproj/xcuserdata/jxjzhang.xcuserdatad/xcschemes/xcschememanagement.plist

@@ -44,7 +44,7 @@ namespace rs {
             for (int i = 1; i <= num_replicates_; i++) {
                 vector<int> elem;
                 string em_file = em_file_prefix_ + std::to_string(i) + "_em";
-                if (debug) printf("Reading file: %s\n", em_file);
+                if (debug) printf("Reading file: %s\n", em_file.c_str());
                 fstream istream(em_file, ios::in);
                 string line;
                 while (getline(istream, line)) {
