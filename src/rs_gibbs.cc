@@ -26,6 +26,8 @@ DEFINE_string(em_file_prefix, "",
 namespace rs {
     class GibbsSampler {
     public:
+        bool debug = true;
+        
         GibbsSampler(const int num_replicates, const string em_file_prefix){
             num_replicates_ = num_replicates;
             em_file_prefix_ = em_file_prefix;
@@ -39,21 +41,23 @@ namespace rs {
             // Initialize n values of G for max t: P(G = t | ...) = theta_t * M_sigmer,t / L_t
         
             
-            for (int i = 1; i < num_replicates_; i++) {
+            for (int i = 1; i <= num_replicates_; i++) {
                 vector<int> elem;
-                string em_file = em_file_prefix_ + std::to_string(i+1) + "_em";
+                string em_file = em_file_prefix_ + std::to_string(i) + "_em";
+                if (debug) printf("Reading file: %s\n", em_file);
                 fstream istream(em_file, ios::in);
                 string line;
                 while (getline(istream, line)) {
                     vector<string> tokens = split(line, '\t');
                     int occ = atoi(tokens[2].c_str());
                     elem.push_back(occ);
+                    printf("%i\t", occ);
                 }
-                printf("Elem size: %i\n", elem.size());
+                if (debug) printf("\nElem size: %i\n", elem.size());
                 theta.push_back(elem);
             }
             
-            printf("Current theta size: %i x %i\n", theta.size(), theta[0].size());
+            if (debug) printf("Current theta size: %i x %i\n", theta.size(), theta[0].size());
             
             /*
             //read theta from EM results
