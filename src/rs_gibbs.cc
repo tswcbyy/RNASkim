@@ -54,42 +54,12 @@ namespace rs {
                     int occ = atoi(tokens[2].c_str());
                     elem.push_back(occ);
                 }
-                if (debug) printf("\nRow %i size: %i\n", i, elem.size());
+                if (debug) printf("\nRow %i size: %zu\n", i, elem.size());
                 theta.push_back(elem);
             }
             
-            if (debug) printf("Theta size: %i replicates x %i transcripts\n", theta.size(), theta[0].size());
+            if (debug) printf("Theta size: %zu replicates x %zu transcripts\n", theta.size(), theta[0].size());
             
-            /*
-            //read theta from EM results
-            theta.resize(num_replicates_);
-            vector<int> elem;
-            string em_file = em_file_prefix_ + "1_em";
-            fstream istream(em_file, ios::in);
-            string line;
-            while (getline(istream, line)) {
-                vector<string> tokens = split(line, '\t');
-                int occ = atoi(tokens[2].c_str());
-                elem.push_back(occ);
-            }
-            num_trans = elem.size();
-            theta[0] = elem;
-            
-            //read theta from EM results (cont)
-            for (int i = 1; i < num_replicates_; ++i) {
-                vector<int> elem(num_trans);
-                string em_file = em_file_prefix_ + std::to_string(i+1) + "_em";
-                fstream istream(em_file, ios::in);
-                string line;
-                int t = 0;
-                while (getline(istream, line)) {
-                    vector<string> tokens = split(line, '\t');
-                    int occ = atoi(tokens[2].c_str());
-                    elem[t] = occ;
-                    ++t;
-                }
-                theta[i] = elem;
-            }
             
             //map from the order of transcripts to their tids
             order2tid.resize(num_trans);
