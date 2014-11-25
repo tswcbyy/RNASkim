@@ -32,6 +32,8 @@ namespace rs {
             num_replicates_ = num_replicates;
             em_file_prefix_ = em_file_prefix;
             
+            printf("File prefix: %s\n", em_file_prefix);
+            
             // For each replicate:
             // Create theta matrix: num_replicates x number of transcripts
             // Create M matrix
@@ -43,7 +45,7 @@ namespace rs {
             
             for (int i = 1; i <= num_replicates_; i++) {
                 vector<int> elem;
-                string em_file = em_file_prefix_ + std::to_string(i) + "_em";
+                string em_file = em_file_prefix + std::to_string(i) + "_em";
                 if (debug) printf("Reading file: %s\n", em_file.c_str());
                 fstream istream(em_file, ios::in);
                 string line;
