@@ -32,7 +32,7 @@ namespace rs {
             num_replicates_ = num_replicates;
             em_file_prefix_ = em_file_prefix;
             
-            printf("File prefix: %s\n", em_file_prefix.c_str());
+            if (debug) printf("File prefix: %s\n", em_file_prefix.c_str());
             
             // For each replicate:
             // Create theta matrix: num_replicates x number of transcripts
@@ -43,9 +43,9 @@ namespace rs {
             // Initialize n values of G for max t: P(G = t | ...) = theta_t * M_sigmer,t / L_t
         
             
-            for (int i = 1; i <= num_replicates_; i++) {
+            for (int i = 0; i < num_replicates_; i++) {
                 vector<int> elem;
-                string em_file = em_file_prefix + std::to_string(i) + "_em";
+                string em_file = em_file_prefix + std::to_string(i + 1) + "_em";
                 if (debug) printf("Reading file: %s\n", em_file.c_str());
                 fstream istream(em_file, ios::in);
                 string line;
@@ -53,13 +53,12 @@ namespace rs {
                     vector<string> tokens = split(line, '\t');
                     int occ = atoi(tokens[2].c_str());
                     elem.push_back(occ);
-                    printf("%i\t", occ);
                 }
-                if (debug) printf("\nElem size: %i\n", elem.size());
+                if (debug) printf("\nRow %i size: %i\n", i, elem.size());
                 theta.push_back(elem);
             }
             
-            if (debug) printf("Current theta size: %i x %i\n", theta.size(), theta[0].size());
+            if (debug) printf("Theta size: %i replicates x %i transcripts\n", theta.size(), theta[0].size());
             
             /*
             //read theta from EM results
