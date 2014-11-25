@@ -26,10 +26,25 @@ DEFINE_string(em_file_prefix, "",
 namespace rs {
     class GibbsSampler {
     public:
-        GibbsSampler(const int num_repicates, const string em_file_prefix){
-            num_replicates_ = num_repicates;
+        GibbsSampler(const int num_replicates, const string em_file_prefix){
+            num_replicates_ = num_replicates;
             em_file_prefix_ = em_file_prefix;
             
+            // For each replicate:
+            // Create theta matrix: num_replicates x number of transcripts
+            // Create M matrix
+            // Create L vector
+            
+            // G per n sigmer occurrences:
+            // Initialize n values of G for max t: P(G = t | ...) = theta_t * M_sigmer,t / L_t
+            
+            printf("Current theta size: %i x %i\n", theta.size(), theta[0].size());
+            theta.resize(num_replicates);
+            for (int i = 1; i < num_replicates_; i++) {
+                
+            }
+            
+            /*
             //read theta from EM results
             theta.resize(num_replicates_);
             vector<int> elem;
@@ -43,17 +58,6 @@ namespace rs {
             }
             num_trans = elem.size();
             theta[0] = elem;
-            
-            //map from the order of transcripts to their tids
-            order2tid.resize(num_trans);
-            fstream is(em_file, ios::in);
-            int t = 0;
-            while (getline(is, line)) {
-                vector<string> tokens = split(line, '\t');
-                string tid = tokens[0];
-                order2tid[t] = tid;
-                ++t;
-            }
             
             //read theta from EM results (cont)
             for (int i = 1; i < num_replicates_; ++i) {
@@ -71,6 +75,17 @@ namespace rs {
                 theta[i] = elem;
             }
             
+            //map from the order of transcripts to their tids
+            order2tid.resize(num_trans);
+            fstream is(em_file, ios::in);
+            int t = 0;
+            while (getline(is, line)) {
+                vector<string> tokens = split(line, '\t');
+                string tid = tokens[0];
+                order2tid[t] = tid;
+                ++t;
+            }
+            
             //check the correntness of order2tid mapping
             for (int t = 0; t < num_trans; ++t) {
                 cout << order2tid[t] << " ";
@@ -86,6 +101,7 @@ namespace rs {
                 }
                 cout << endl;
             }
+             */
             
         }
         
