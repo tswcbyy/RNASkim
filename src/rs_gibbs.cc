@@ -42,13 +42,13 @@ namespace rs {
             // G per n sigmer occurrences:
             // Initialize n values of G for max t: P(G = t | ...) = theta_t * M_sigmer,t / L_t
         
+            string em_file, line;
             
             for (int i = 0; i < num_replicates_; i++) {
                 vector<int> elem;
-                string em_file = em_file_prefix + std::to_string(i + 1) + "_em";
+                em_file = em_file_prefix + std::to_string(i + 1) + "_em";
                 if (debug) printf("Reading file: %s\n", em_file.c_str());
                 fstream istream(em_file, ios::in);
-                string line;
                 while (getline(istream, line)) {
                     vector<string> tokens = split(line, '\t');
                     int occ = atoi(tokens[2].c_str());
@@ -60,7 +60,7 @@ namespace rs {
             
             if (debug) printf("Theta size: %zu replicates x %zu transcripts\n", theta.size(), theta[0].size());
             
-            
+            /*
             //map from the order of transcripts to their tids
             order2tid.resize(num_trans);
             fstream is(em_file, ios::in);
@@ -88,6 +88,7 @@ namespace rs {
                 cout << endl;
             }
             */
+            
             
         }
         
