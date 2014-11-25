@@ -32,7 +32,7 @@ namespace rs {
             num_replicates_ = num_replicates;
             em_file_prefix_ = em_file_prefix;
             
-            printf("File prefix: %s\n", em_file_prefix);
+            printf("File prefix: %s\n", em_file_prefix.c_str());
             
             // For each replicate:
             // Create theta matrix: num_replicates x number of transcripts
