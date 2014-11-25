@@ -49,6 +49,7 @@ namespace rs {
                     int occ = atoi(tokens[2].c_str());
                     elem.push_back(occ);
                 }
+                printf("Elem size: %i\n", elem.size());
                 theta.push_back(elem);
             }
             
