@@ -57,10 +57,20 @@ namespace rs {
             while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
                 vector<string> transcript_list;
                 for (int i = 0; i < sk.tids_size(); i++) {
-                    transcript_list.push_back(sk.tids(i));
-                    transcript_cluster_map[sk.tids(i)] = sk.gid();
+                    if (transcript_cluster_map.find(sk.tids(i)) != transcript_cluster_map.end()) {
+                        printf("Transcript-cluster (%s,%s) already exists in map (new cluster %s with %i transcripts); original cluster with %zu transcripts\n", sk.tids(i).c_str(), transcript_cluster_map[sk.tids(i)].c_str(), sk.gid().c_str(), sk.tids_size(), cluster_transcripts_map[transcript_cluster_map[sk.tids(i)]].size());
+                    } else {
+                        transcript_list.push_back(sk.tids(i));
+                        transcript_cluster_map[sk.tids(i)] = sk.gid();
+                    }
                 }
-                cluster_transcripts_map[sk.gid()] = transcript_list;
+                
+                if (transcript_list.size() > 0) {
+                    if (cluster_transcripts_map.find(sk.gid()) != cluster_transcripts_map.end()) {
+                        printf("Cluster %s already in map\n", sk.gid().c_str());
+                    }
+                    cluster_transcripts_map[sk.gid()] = transcript_list;
+                }
             }
             num_transcripts = (int)transcript_cluster_map.size();
             num_clusters = (int)cluster_transcripts_map.size();
