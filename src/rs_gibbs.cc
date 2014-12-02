@@ -78,48 +78,63 @@ namespace rs {
             
             // For each replicate:
             
-            // TODO: separate by cluster
+            // cluster_theta_map: each cluster mapped to a theta matrix
             map<string, vector<vector<int>>> cluster_theta_map;
+            for (map<string, vector<string>>::iterator it= cluster_transcripts_map.begin(); it!=cluster_transcripts_map.end(); it++) {
+                vector<vector<int>> theta_matrix;
+                theta_matrix.resize(num_replicates);
+                for (int i = 0; i < (int)theta_matrix.size(); i++) {
+                    theta_matrix[i].resize(it->second.size());
+                }
+                cluster_theta_map[it->first] = theta_matrix;
+            }
+            
             // Each theta matrix: num_replicates x number of transcripts
             for (int i = 0; i < num_replicates; i++) {
-                vector<int> elem;
                 em_file = em_file_prefix + std::to_string(i + 1) + "_em";
                 if (DEBUG) printf("Reading file: %s\t", em_file.c_str());
                 fstream istream(em_file, ios::in);
                 while (getline(istream, line)) {
                     vector<string> tokens = split(line, '\t');
+                    // if (DEBUG) printf("Prepping line: %s\n", line.c_str());
                     int occ = atoi(tokens[2].c_str());
-                    elem.push_back(occ);
+                    string transcript = tokens[0].c_str();
+                    string cluster = transcript_cluster_map[transcript].c_str();
+                
+                    vector<string> transcripts = cluster_transcripts_map[cluster];
+                    // Find the index of the transcript in the cluster
+                    int j = find(transcripts.begin(), transcripts.end(), transcript) - transcripts.begin();
+                    if (j >= (int)transcripts.size()) {
+                        fprintf(stderr, "ERROR: failed to find index for %s in cluster %s\n", transcript.c_str(), cluster.c_str());
+                    }
+                    
+                    vector<vector<int>> theta_matrix = cluster_theta_map[cluster];
+                    theta_matrix[i][j] = occ;
+                    cluster_theta_map[cluster] = theta_matrix;
+                    
+                    // if (DEBUG) printf("Set (%i, %i) on cluster %s for transcript %s to %i\n", i, j, cluster.c_str(), transcript.c_str(), occ);
                 }
-                if (DEBUG) printf("Row %i size: %zu\n", i, elem.size());
-                theta.push_back(elem);
+                
             }
-            
-            // Theta error check: each replicate has same number of transcripts
-            for (int i = 0; i < (int)theta.size(); i++) {
-                assert((int)theta[i].size() == num_transcripts);
-            }
-            if (DEBUG) printf("Theta size: %zu replicates x %zu transcripts\n", theta.size(), theta[0].size());
             
             // Create F matrix: number of sigmers x number of transcripts
-            for (int i = 0; i < num_replicates; i++) {
-                vector<int> transcript_list;
-                cf_file = em_file_prefix + std::to_string(i + 1) + ".cf";
-                if (DEBUG) printf("Reading file: %s\t", cf_file.c_str());
-                fstream istream(cf_file, ios::in | ios::binary);
-                
-                SelectedKey sk;
-                int buffer_size = 200000000;
-                ::google::protobuf::uint8 * buffer =
-                new ::google::protobuf::uint8[buffer_size];
-                // each sk is a cluster of sigmers
-                // sk.keys is the group of sigmers associated with each cluster
-                // sk.keys(j).transcript_infos is the group of transcripts each sk.keys(j) sigmer is assoc with
-                // sk.keys(j).transcript_infos(k).tidx is the transcript identifier
-                // sk.keys(j).transcript_infos(k).positions_size() is the number of times a sigmer appears in the transcript
-                while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
-                    //printf("Number of sigmers: %i for cluster %s\n", sk.keys_size(), sk.gid().c_str());
-                }
+            // F matrix should be same for all replicates -- only analyze 1
+            vector<int> transcript_list;
+            cf_file = em_file_prefix + std::to_string(1) + ".cf";
+            if (DEBUG) printf("Reading file for F matrix: %s\t", cf_file.c_str());
+            fstream istream(cf_file, ios::in | ios::binary);
+            
+            SelectedKey sk;
+            int buffer_size = 200000000;
+            ::google::protobuf::uint8 * buffer =
+            new ::google::protobuf::uint8[buffer_size];
+            // each sk is a cluster of sigmers
+            // sk.keys is the group of sigmers associated with each cluster
+            // sk.keys(j).transcript_infos is the group of transcripts each sk.keys(j) sigmer is assoc with
+            // sk.keys(j).transcript_infos(k).tidx is the transcript identifier
+            // sk.keys(j).transcript_infos(k).positions_size() is the number of times a sigmer appears in the transcript
+            while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
+                //printf("Number of sigmers: %i for cluster %s\n", sk.keys_size(), sk.gid().c_str());
             }
             
             
@@ -169,6 +184,8 @@ namespace rs {
             }
             return elems;
         }
+        
+        
         
         void run(){
             cout << "done" << endl;
