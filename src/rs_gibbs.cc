@@ -169,8 +169,8 @@ namespace rs {
                 vector<int> L;
                 L.resize(F[0].size(), 0); // length = number of transcripts (row size)
 
-                for (int i = 0; i < F.size(); i++) {
-                    for (int j = 0; j < F[i].size(); j++) {
+                for (int i = 0; i < (int)F.size(); i++) {
+                    for (int j = 0; j < (int)F[i].size(); j++) {
                         L[j] += F[i][j];
                     }
                 }
