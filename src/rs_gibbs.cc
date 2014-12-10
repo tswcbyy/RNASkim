@@ -78,7 +78,6 @@ namespace rs {
             // For each replicate:
             
             // cluster_theta_map: each cluster mapped to a theta matrix
-            map<string, vector<vector<int>>> cluster_theta_map;
             for (map<string, vector<string>>::iterator it= cluster_transcripts_map.begin(); it!=cluster_transcripts_map.end(); it++) {
                 vector<vector<int>> theta_matrix;
                 theta_matrix.resize(num_replicates);
@@ -163,7 +162,21 @@ namespace rs {
             }
             if (DEBUG) printf("cluster_Fmatrix_map number of clusters: %zu\n", cluster_Fmatrix_map.size());
             
-            // Create L vector
+            // Create L vector per cluster
+            for (map<string, vector<vector<int>>>::iterator it= cluster_Fmatrix_map.begin(); it!=cluster_Fmatrix_map.end(); it++) {
+                string cluster = it->first;
+                vector<vector<int>> F = it->second;
+                vector<int> L;
+                L.resize(F[0].size(), 0); // length = number of transcripts (row size)
+
+                for (int i = 0; i < F.size(); i++) {
+                    for (int j = 0; j < F[i].size(); j++) {
+                        L[j] += F[i][j];
+                    }
+                }
+                
+                cluster_L_map[cluster] = L;
+            }
             
             // G per n sigmer occurrences:
             // Initialize n values of G for max t: P(G = t | ...) = theta_t * M_sigmer,t / L_t
@@ -226,9 +239,11 @@ namespace rs {
         vector<vector<int>> F;
         map<SelectedKey_Key, int> parent; //G
         
-        map<string, vector<string>> cluster_transcripts_map; // Cluster -> list of associated transcripts
+        map<string, vector<string>> cluster_transcripts_map; // cluster -> list of associated transcripts
         map<string, string> transcript_cluster_map; // transcript -> corresponding cluster
+        map<string, vector<vector<int>>> cluster_theta_map; // cluster -> theta matrix of occurrences of sigmers per transcript
         map<string, vector<vector<int>>> cluster_Fmatrix_map; // cluster -> F matrix
+        map<string, vector<int>> cluster_L_map; // cluster -> L vector
     };
 }
 
