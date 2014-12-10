@@ -42,8 +42,6 @@ namespace rs {
             // Create mapping for each cluster -> transcript IDs
             // Map transcript IDs to specific columns in the theta and F matrices(?)
             // TODO: discard less useful map(?)
-            map<string, vector<string>> cluster_transcripts_map;
-            map<string, string> transcript_cluster_map;
             cf_file = em_file_prefix + std::to_string(1) + ".cf";
             if (DEBUG) printf("Reading file: %s\n", cf_file.c_str());
             fstream istream(cf_file, ios::in | ios::binary);
@@ -120,9 +118,8 @@ namespace rs {
             
             // Create set of F matrices per cluster: number of sigmers x number of transcripts
             // F matrix should be same for all replicates -- only analyze 1
-            map<string, vector<vector<int>>> cluster_Fmatrix_map;
             cf_file = em_file_prefix + std::to_string(1) + ".cf";
-            if (DEBUG) printf("Reading file for F matrix: %s\t", cf_file.c_str());
+            if (DEBUG) printf("Reading file for F matrix: %s\n", cf_file.c_str());
             fstream istream2(cf_file, ios::in | ios::binary);
             //::google::protobuf::buffer = new ::google::protobuf::uint8[buffer_size];
             // each sk is a cluster of sigmers
@@ -131,19 +128,19 @@ namespace rs {
             // sk.keys(j).transcript_infos(k).tidx is the transcript identifier
             // sk.keys(j).transcript_infos(k).positions_size() is the number of times a sigmer appears in the transcript
             while(load_protobuf_data(&istream2, &sk, buffer, buffer_size)) {
-                printf("Number of sigmers: %i for cluster %s\n", sk.keys_size(), sk.gid().c_str());
                 vector<vector<int>> Fmatrix;
                 string cluster = sk.gid().c_str();
                 // iterate over sigmers
                 for (int i = 0; i < sk.keys_size(); i++) {
-                    // create vector of positions_size (coordinating indices on each transcript)
+                    // create vector -- size = num_transcripts per cluster, each entry is number of times a sigmer appears in the transcript
                     vector<int> transcript_vector;
                     transcript_vector.resize(cluster_transcripts_map[cluster].size());
                     
                     string sigmer = sk.keys(i).key();
                     // iterate over the transcripts associated with the sigmers
-                    for (int j = 0; j < sk.keys(i).transcript_infos_size(); j++) {/*
-                        string transcript = sk.tids(sk.keys(i).transcript_infos(j).tidx()); // TODO: How do I find the transcript id?
+                    for (int j = 0; j < sk.keys(i).transcript_infos_size(); j++) {
+                        int tidx = sk.keys(i).transcript_infos(j).tidx();
+                        string transcript = sk.tids(tidx); // TODO: Verify this?
                         
                         if (DEBUG) { // assertion: every cluster assoc with transcripts should be same
                             string test_cluster = transcript_cluster_map[transcript];
@@ -157,17 +154,14 @@ namespace rs {
                             fprintf(stderr, "ERROR: failed to find index for %s in cluster %s\n", transcript.c_str(), cluster.c_str());
                         }
                         
-                        transcript_vector[k] = sk.keys(i).transcript_infos(j).positions_size();*/
-                        int tidx = sk.keys(i).transcript_infos(j).tidx();
-                        int num_transcripts = sk.tids_size();
-                        if (DEBUG && num_transcripts <= tidx) printf("WARNING: sigmer %i: %s; tidx %i; tids_size: %i\n", i, sigmer.c_str(), tidx, num_transcripts);
+                        transcript_vector[k] = sk.keys(i).transcript_infos(j).positions_size();
                     }
                     Fmatrix.push_back(transcript_vector);
                 }
                 cluster_Fmatrix_map[cluster] = Fmatrix;
                 //if (DEBUG) printf("Fmatrix for cluster %s: %zu sigmers x %zu transcripts\n", cluster.c_str(), Fmatrix.size(), Fmatrix[0].size());
             }
-            //if (DEBUG) printf("cluster_Fmatrix_map number of clusters: %zu\n", cluster_Fmatrix_map.size());
+            if (DEBUG) printf("cluster_Fmatrix_map number of clusters: %zu\n", cluster_Fmatrix_map.size());
             
             // Create L vector
             
@@ -232,6 +226,9 @@ namespace rs {
         vector<vector<int>> F;
         map<SelectedKey_Key, int> parent; //G
         
+        map<string, vector<string>> cluster_transcripts_map; // Cluster -> list of associated transcripts
+        map<string, string> transcript_cluster_map; // transcript -> corresponding cluster
+        map<string, vector<vector<int>>> cluster_Fmatrix_map; // cluster -> F matrix
     };
 }
 
