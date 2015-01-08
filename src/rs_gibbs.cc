@@ -77,13 +77,13 @@ namespace rs {
             // For each replicate:
             
             // cluster_theta_map: each cluster mapped to a theta matrix
-            for (map<string, vector<string>>::iterator it= cluster_transcripts_map.begin(); it!=cluster_transcripts_map.end(); it++) {
+            for (auto it : cluster_transcripts_map) {
                 vector<vector<int>> theta_matrix;
                 theta_matrix.resize(num_replicates);
                 for (int i = 0; i < (int)theta_matrix.size(); i++) {
-                    theta_matrix[i].resize(it->second.size());
+                    theta_matrix[i].resize(it.second.size());
                 }
-                cluster_theta_map[it->first] = theta_matrix;
+                cluster_theta_map[it.first] = theta_matrix;
             }
             
             // Each theta matrix: num_replicates x number of transcripts
@@ -134,41 +134,47 @@ namespace rs {
             while(load_protobuf_data(&istream2, &sk, buffer, buffer_size)) {
                 vector<vector<int>> Fmatrix;
                 string cluster = sk.gid().c_str();
-                
+                // if (DEBUG) printf("Analyzing cluster %s for %i sigmers\n", cluster.c_str(), sk.keys_size());
+                vector<string> transcripts = cluster_transcripts_map[cluster];
+                if (transcripts.size() == 0) {
+                    if (DEBUG) printf("SKIP: cluster %s\n", cluster.c_str());
+                    continue;
+                }
+
                 // iterate over sigmers
                 for (int i = 0; i < sk.keys_size(); i++) {
                     // create vector -- size = num_transcripts per cluster, each entry is number of times a sigmer appears in the transcript
                     vector<int> transcript_vector;
                     transcript_vector.resize(cluster_transcripts_map[cluster].size());
-                    
+
                     string sigmer = sk.keys(i).key();
                     // iterate over the transcripts associated with the sigmers
                     for (int j = 0; j < sk.keys(i).transcript_infos_size(); j++) {
                         int tidx = sk.keys(i).transcript_infos(j).tidx();
                         string transcript = sk.tids(tidx); // TODO: Verify this?
-                        
+
                         if (DEBUG) { // assertion: every cluster assoc with transcripts should be same
                             string test_cluster = transcript_cluster_map[transcript];
                             assert(strcmp(cluster.c_str(), test_cluster.c_str()) == 0);
                         }
-                        
+
                         // Find the index of the transcript in the cluster
-                        vector<string> transcripts = cluster_transcripts_map[cluster];
-                        int k = find(transcripts.begin(), transcripts.end(), transcript) - transcripts.begin();
+                        int k = find(transcripts.begin(), transcripts.end(), transcript) - transcripts.begin(); // TODO: efficiency problem
                         if (k >= (int)transcripts.size()) {
                             fprintf(stderr, "ERROR: failed to find index for %s in cluster %s\n", transcript.c_str(), cluster.c_str());
                         }
-                        
+
                         transcript_vector[k] = sk.keys(i).transcript_infos(j).positions_size();
                     }
                     Fmatrix.push_back(transcript_vector);
-                    
+
                     // TODO: set the cluster_G_map[cluster] = vector of G maps
                 }
                 cluster_Fmatrix_map[cluster] = Fmatrix;
                 //if (DEBUG) printf("Fmatrix for cluster %s: %zu sigmers x %zu transcripts\n", cluster.c_str(), Fmatrix.size(), Fmatrix[0].size());
-                
+
                 // Create r vectors for sigmer -> transcript id from initial_G
+                // G per n sigmer occurrences:
                 vector<vector<int>> Gvector;
                 for (int i = 0; i < num_replicates; i++) {
                     vector<int> G;
@@ -178,11 +184,13 @@ namespace rs {
                 cluster_G_map[cluster] = Gvector;
             }
             if (DEBUG) printf("cluster_Fmatrix_map number of clusters: %zu\n", cluster_Fmatrix_map.size());
-            
+
             // Create L vector per cluster
-            for (map<string, vector<vector<int>>>::iterator it= cluster_Fmatrix_map.begin(); it!=cluster_Fmatrix_map.end(); it++) {
-                string cluster = it->first;
-                vector<vector<int>> F = it->second;
+            for (auto it : cluster_Fmatrix_map) {
+                string cluster = it.first;
+                vector<vector<int>> F = it.second;
+                if (DEBUG) printf("F matrix %s: %zu\n", cluster.c_str(), F.size());
+
                 vector<int> L;
                 L.resize(F[0].size(), 0); // length = number of transcripts (row size)
 
@@ -191,12 +199,78 @@ namespace rs {
                         L[j] += F[i][j];
                     }
                 }
-                
+
                 cluster_L_map[cluster] = L;
             }
-            
-            // G per n sigmer occurrences:
-            // Initialize n values of G for max t: P(G = t | ...) = theta_t * M_sigmer,t / L_t
+
+            /*
+
+             map<string, vector<string>> cluster_transcripts_map; // cluster -> list of associated transcripts
+             map<string, string> transcript_cluster_map; // transcript -> corresponding cluster
+             map<string, vector<vector<int>>> cluster_theta_map; // cluster -> theta matrix of occurrences of sigmers per transcript
+             map<string, vector<vector<int>>> cluster_Fmatrix_map; // cluster -> F matrix: sigmers x transcripts (num of sigmers per transcript)
+             map<string, vector<int>> cluster_L_map; // cluster -> L vector, length = number of transcripts (#sigmers per transcript)
+             map<string, vector<vector<int>>> cluster_G_map; // cluster -> #replicates x #sigmers -> index of transcript
+
+            */
+
+
+            /* Gibbs:
+             1) For each cluster c, for each replicate r, for each sigmer occurrence s: re-sample G (transcript)
+             P(G = t | ...) = theta_t * F_s,t / L_t
+
+             2) theta matrix:
+             For each replicate cluster c, for each replicate r:
+             P(theta_rt | ...) = P(theta_r,t | m_t) * (theta_r,t / (sum_(i != t) theta_r,i + theta_r,t))^(#G == t)
+
+             3) For each cluster c, produce m vector (length = num transcripts)
+             For each transcript t:
+             P(m_t| ...) = product_r (P(theta_r,t | m_t))
+             P(theta_r,t | m_t) = choose(theta_r,t + q - 1, theta_r,t) (1-p)^q * p^(theta_rt)
+             Normalize m vector; output
+
+             */
+
+            // for each cluster:
+            for (auto it : cluster_transcripts_map) {
+                string cluster = it.first;
+                vector<string> transcripts = it.second;
+                int num_transcripts_cluster = (int) transcripts.size();
+                if (DEBUG) printf("Gibbs sampling for cluster: %s\n", cluster.c_str());
+
+                // initializations
+                vector<vector<int>> G = cluster_G_map[cluster]; // #replicates x #sigmers
+                vector<vector<int>> theta = cluster_theta_map[cluster]; // #replicates x #transcripts
+                vector<vector<int>> F = cluster_Fmatrix_map[cluster]; // #sigmers x #transcripts
+                vector<int> L = cluster_L_map[cluster]; // #transcripts
+                vector<vector<double>> m; // 1000 x normalized vector #transcripts
+
+                for (int i = 0; i < 1000; i++) {
+                    // Resample G
+                    for (int r = 0; r < (int)G.size(); r++) {
+                        for (int s = 0; s < (int)G[0].size(); s++) {
+                            // G[r][s] = ... ;
+                            // choose random t from distribution over all t: theta[r][t] * F[s][t] / L[t]
+                        }
+                    }
+
+                    // Resample theta
+
+                    // Resample m and output
+                    vector<double> m_iter(num_transcripts_cluster);
+                    m.push_back(m_iter);
+                }
+
+                // TODO:
+                vector<double> m_mean(num_transcripts_cluster); // mean m across 1000 iterations x #transcripts
+                vector<double> m_25(num_transcripts_cluster); // 25th m x #transcripts
+                vector<double> m_975(num_transcripts_cluster); // 975th m x #transcripts
+                vector<double> m_var(num_transcripts_cluster); // variance of m x #transcripts
+                
+                for (int i = 0; i < num_transcripts_cluster; i++) {
+                    printf("%s\t%f\t%f\t%f\t%f\n", transcripts[i].c_str(), m_mean[i] * size_condition, m_var[i] * size_condition * size_condition, m_25[i], m_975[i]);
+                }
+            }
             
             /*
             //map from the order of transcripts to their tids
@@ -240,6 +314,9 @@ namespace rs {
             return elems;
         }
         
+        int random_index(vector<double> distribution) {
+            return 0;
+        }
         
         
         void run(){
@@ -260,8 +337,11 @@ namespace rs {
         map<string, string> transcript_cluster_map; // transcript -> corresponding cluster
         map<string, vector<vector<int>>> cluster_theta_map; // cluster -> theta matrix of occurrences of sigmers per transcript
         map<string, vector<vector<int>>> cluster_Fmatrix_map; // cluster -> F matrix: sigmers x transcripts (num of sigmers per transcript)
-        map<string, vector<int>> cluster_L_map; // cluster -> L vector
+        map<string, vector<int>> cluster_L_map; // cluster -> L vector, length = number of transcripts (#sigmers per transcript)
         map<string, vector<vector<int>>> cluster_G_map; // cluster -> #replicates x #sigmers -> index of transcript
+        int size_condition = 1; // TODO: calc size factor for condition
+        
+        
     };
 }
 
