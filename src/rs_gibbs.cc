@@ -1,10 +1,13 @@
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
 #include <fstream>
 #include <string>
 #include <vector>
 #include <map>
 #include <sstream>
 #include <assert.h>
+#include <random>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -13,6 +16,8 @@
 #include "rs_estimate_lib.h"
 #include "proto/rnasigs.pb.h"
 #include "proto_data.h"
+
+#include <boost/random/discrete_distribution.hpp>
 
 using std::string;
 using std::vector;
@@ -38,6 +43,10 @@ namespace rs {
             
             string em_file, line, cf_file;
             int num_transcripts, num_clusters;
+
+            string output_filename = em_file_prefix + ".gibbs";
+            FILE *output;
+            output = fopen(output_filename.c_str(), "w");
             
             // Create mapping for each cluster -> transcript IDs
             // Map transcript IDs to specific columns in the theta and F matrices(?)
@@ -134,8 +143,8 @@ namespace rs {
             while(load_protobuf_data(&istream2, &sk, buffer, buffer_size)) {
                 vector<vector<int>> Fmatrix;
                 string cluster = sk.gid().c_str();
-                // if (DEBUG) printf("Analyzing cluster %s for %i sigmers\n", cluster.c_str(), sk.keys_size());
                 vector<string> transcripts = cluster_transcripts_map[cluster];
+                //if (DEBUG) printf("Analyzing cluster %s for %i sigmers, with %zu transcripts\n", cluster.c_str(), sk.keys_size(), transcripts.size());
                 if (transcripts.size() == 0) {
                     if (DEBUG) printf("SKIP: cluster %s\n", cluster.c_str());
                     continue;
@@ -159,7 +168,7 @@ namespace rs {
                         }
 
                         // Find the index of the transcript in the cluster
-                        int k = find(transcripts.begin(), transcripts.end(), transcript) - transcripts.begin(); // TODO: efficiency problem
+                        int k = find(transcripts.begin(), transcripts.end(), transcript) - transcripts.begin(); // TODO: fix efficiency
                         if (k >= (int)transcripts.size()) {
                             fprintf(stderr, "ERROR: failed to find index for %s in cluster %s\n", transcript.c_str(), cluster.c_str());
                         }
@@ -167,8 +176,6 @@ namespace rs {
                         transcript_vector[k] = sk.keys(i).transcript_infos(j).positions_size();
                     }
                     Fmatrix.push_back(transcript_vector);
-
-                    // TODO: set the cluster_G_map[cluster] = vector of G maps
                 }
                 cluster_Fmatrix_map[cluster] = Fmatrix;
                 //if (DEBUG) printf("Fmatrix for cluster %s: %zu sigmers x %zu transcripts\n", cluster.c_str(), Fmatrix.size(), Fmatrix[0].size());
@@ -189,7 +196,8 @@ namespace rs {
             for (auto it : cluster_Fmatrix_map) {
                 string cluster = it.first;
                 vector<vector<int>> F = it.second;
-                if (DEBUG) printf("F matrix %s: %zu\n", cluster.c_str(), F.size());
+                vector<string> transcripts = cluster_transcripts_map[cluster];
+                // if (DEBUG) printf("F matrix %s: %zu\n", cluster.c_str(), F.size());
 
                 vector<int> L;
                 L.resize(F[0].size(), 0); // length = number of transcripts (row size)
@@ -197,6 +205,11 @@ namespace rs {
                 for (int i = 0; i < (int)F.size(); i++) {
                     for (int j = 0; j < (int)F[i].size(); j++) {
                         L[j] += F[i][j];
+                    }
+                }
+                for (int i = 0; i < (int)L.size(); i++) {
+                    if (L[i] == 0) {
+                        printf("WARNING: transcript %s : %s has 0 sigmers\n", cluster.c_str(), transcripts[i].c_str());
                     }
                 }
 
@@ -231,12 +244,13 @@ namespace rs {
 
              */
 
+            std::default_random_engine generator;
             // for each cluster:
             for (auto it : cluster_transcripts_map) {
                 string cluster = it.first;
                 vector<string> transcripts = it.second;
                 int num_transcripts_cluster = (int) transcripts.size();
-                if (DEBUG) printf("Gibbs sampling for cluster: %s\n", cluster.c_str());
+                if (DEBUG) printf("Gibbs sampling for cluster: %s [%i]\n", cluster.c_str(), num_transcripts_cluster);
 
                 // initializations
                 vector<vector<int>> G = cluster_G_map[cluster]; // #replicates x #sigmers
@@ -245,16 +259,31 @@ namespace rs {
                 vector<int> L = cluster_L_map[cluster]; // #transcripts
                 vector<vector<double>> m; // 1000 x normalized vector #transcripts
 
+                if (DEBUG) printf("G: %zu rows\n", G.size());
+
                 for (int i = 0; i < 1000; i++) {
                     // Resample G
+                    if (DEBUG) printf("G iteration %i\n", i);
                     for (int r = 0; r < (int)G.size(); r++) {
                         for (int s = 0; s < (int)G[0].size(); s++) {
-                            // G[r][s] = ... ;
+                            vector<double> G_probs;
                             // choose random t from distribution over all t: theta[r][t] * F[s][t] / L[t]
+                            for (int t = 0; t < num_transcripts_cluster; t++) {
+                                if (L[t] == 0)
+                                    G_probs.push_back(0);
+                                else
+                                    G_probs.push_back(theta[r][t] * F[s][t] / L[t]);
+                            }
+                            boost::random::discrete_distribution<> distribution(G_probs.begin(), G_probs.end());
+                            G[r][s] = distribution(generator);
                         }
                     }
 
                     // Resample theta
+                    for (int r = 0; r < (int)theta.size(); r++) {
+                        for (int t = 0; t < (int)theta[0].size(); t++) {
+                        }
+                    }
 
                     // Resample m and output
                     vector<double> m_iter(num_transcripts_cluster);
@@ -268,7 +297,7 @@ namespace rs {
                 vector<double> m_var(num_transcripts_cluster); // variance of m x #transcripts
                 
                 for (int i = 0; i < num_transcripts_cluster; i++) {
-                    printf("%s\t%f\t%f\t%f\t%f\n", transcripts[i].c_str(), m_mean[i] * size_condition, m_var[i] * size_condition * size_condition, m_25[i], m_975[i]);
+                    fprintf(output, "%s\t%f\t%f\t%f\t%f\n", transcripts[i].c_str(), m_mean[i] * size_condition, m_var[i] * size_condition * size_condition, m_25[i], m_975[i]);
                 }
             }
             
@@ -313,11 +342,6 @@ namespace rs {
             }
             return elems;
         }
-        
-        int random_index(vector<double> distribution) {
-            return 0;
-        }
-        
         
         void run(){
             cout << "done" << endl;
