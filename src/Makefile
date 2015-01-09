@@ -38,7 +38,9 @@ LDFLAGS = -O3  ../lib/glog-0.3.3/.libs/libglog.a \
 LDFLAGS_WITH_STATIC = $(LDFLAGS) $(STATIC)
 
 INC = -I. -I../lib/gflags-2.0/src/ \
-	-I../lib/glog-0.3.3/src/ -I../lib/protobuf-2.5.0/src/
+	-I../lib/glog-0.3.3/src/ -I../lib/protobuf-2.5.0/src/ \
+    -I/home/jxjzhang/boost_1_57_0 \
+    -L/home/jxjzhang/boost_1_57_0/stage/lib # Needed for rs_gibbs.cc
 
 RS_COMMON_TEST_SRCS = rs_common.cc rs_common_test.cc
 RS_COMMON_TEST_OBJECTS = $(RS_COMMON_TEST_SRCS:.cc=.o)
