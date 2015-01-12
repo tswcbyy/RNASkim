@@ -26,7 +26,7 @@ public:
         this->meanB = meanB;
         this->varianceB = varianceB;
         this->p_value = 1;
-        this->q_value = 1;
+        this->adjusted_p = 1;
         this->is_significant = false;
     }
     
@@ -54,8 +54,8 @@ public:
         return p_value;
     }
     
-    double get_q_value(){
-        return q_value;
+    double get_adjusted_p(){
+        return adjusted_p;
     }
     
     bool get_significant(){
@@ -66,8 +66,8 @@ public:
         p_value = value;
     }
     
-    void set_q_value(double value){
-        q_value = value;
+    void set_adjusted_p(double value){
+        adjusted_p = value;
     }
     
     void set_significant(bool value){
@@ -81,7 +81,7 @@ private:
     double meanB;
     double varianceB;
     double p_value;
-    double q_value;
+    double adjusted_p;
     bool is_significant;
 };
 
@@ -155,7 +155,7 @@ void multiple_testing(vector<transcript*> trans, double FDR){
     for (int i = size-1; i >= 0; --i){
         double new_q = (double)size/(i+1)*trans[i]->get_p_value();
         if (new_q < min) min = new_q;
-        trans[i]->set_q_value(min);
+        trans[i]->set_adjusted_p(min);
         if (min <= FDR) {
             trans[i]->set_significant(true);
         }
@@ -181,12 +181,12 @@ int main(int argc, char *argv[]){
     //output
     cout << "transcript_id" << '\t' << "mean_conditionA" << '\t' << "variance_conditionA" << '\t'
          << "mean_conditionB" << '\t' << "variance_conditionB" << '\t' << "p_value" << '\t'
-         << "q_value" << '\t' << "is_significant" << endl;
+         << "adjusted_p_value" << '\t' << "is_significant" << endl;
     for (int i = 0; i < trans.size(); ++i){
         transcript* t = trans[i];
         cout << t->get_tid() << '\t' << t->get_meanA() << '\t' << t->get_varianceA() << '\t'
              << t->get_meanB() << '\t' << t->get_varianceB() << '\t' << t->get_p_value() << '\t'
-             << t->get_q_value() << '\t';
+             << t->get_adjusted_p() << '\t';
         if (t->get_significant()) {
             cout << "yes";
         }
