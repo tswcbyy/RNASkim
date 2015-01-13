@@ -8,6 +8,7 @@
 #include <sstream>
 #include <assert.h>
 #include <random>
+#include <math.h>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -25,28 +26,28 @@ using std::map;
 using std::cout;
 using std::endl;
 using std::fstream;
+using std::ifstream;
 using std::ios;
 using std::stringstream;
+using std::find;
 
 DEFINE_int32(num_replicates, 4,
              "The number of replicates in this condition.");
 DEFINE_string(em_file_prefix, "",
               "The prefix of the path to the file that contains the EM results.");
+DEFINE_string(input_file, "", "Text file containing all input files (tab-delimited) with 3 columns: condition name, .cf file, _em file");
+
 #define DEBUG 1
 
 namespace rs {
     class GibbsSampler {
     public:
         
-        GibbsSampler(const int num_replicates, const string em_file_prefix){
+        void GibbsSamplerOld(const int num_replicates, const string em_file_prefix){
             if (DEBUG) printf("File prefix: %s\n", em_file_prefix.c_str());
             
             string em_file, line, cf_file;
             int num_transcripts, num_clusters;
-
-            string output_filename = em_file_prefix + ".gibbs";
-            FILE *output;
-            output = fopen(output_filename.c_str(), "w");
             
             // Create mapping for each cluster -> transcript IDs
             // Map transcript IDs to specific columns in the theta and F matrices(?)
@@ -296,43 +297,124 @@ namespace rs {
                 vector<double> m_975(num_transcripts_cluster); // 975th m x #transcripts
                 vector<double> m_var(num_transcripts_cluster); // variance of m x #transcripts
                 
-                for (int i = 0; i < num_transcripts_cluster; i++) {
+                /*for (int i = 0; i < num_transcripts_cluster; i++) {
                     fprintf(output, "%s\t%f\t%f\t%f\t%f\n", transcripts[i].c_str(), m_mean[i] * size_condition, m_var[i] * size_condition * size_condition, m_25[i], m_975[i]);
-                }
+                }*/
             }
-            
-            /*
-            //map from the order of transcripts to their tids
-            order2tid.resize(num_trans);
-            fstream is(em_file, ios::in);
-            int t = 0;
-            while (getline(is, line)) {
-                vector<string> tokens = split(line, '\t');
-                string tid = tokens[0];
-                order2tid[t] = tid;
-                ++t;
-            }
-            
-            //check the correntness of order2tid mapping
-            for (int t = 0; t < num_trans; ++t) {
-                cout << order2tid[t] << " ";
-            }
-            cout << endl;
-            
-            // check the correctness of reading theta from EM results
-            for (int i = 0; i < num_replicates_; ++i) {
-                cout << i << endl;
-                cout << theta[i].size() << endl;
-                for (int t = 0; t < num_trans; ++t) {
-                    cout << theta[i][t] << " ";
-                }
-                cout << endl;
-            }
-            */
-            
             
         }
-        
+
+        GibbsSampler(const string input_file) {
+            parseInputFile(input_file);
+            if (DEBUG) {
+                for (auto it : conditions) {
+                    string c = it.first;
+                    int idx = it.second;
+                    printf("Condition: %s [r = %i]\n", c.c_str(), replicates[idx]);
+                    for (string f : cf_files[idx]) {
+                        printf("\tcf file: %s\n", f.c_str());
+                    }
+                    for (string f : em_files[idx]) {
+                        printf("\tem file: %s\n", f.c_str());
+                    }
+                }
+
+                size_t num_conditions = conditions.size();
+                assert(num_conditions > 0);
+                assert(num_conditions == replicates.size());
+                assert(num_conditions == cf_files.size());
+                assert(num_conditions == em_files.size());
+                for (auto it : conditions) {
+                    int c = it.second;
+                    int r = replicates[c];
+                    assert(r > 0);
+                    assert(r == (int) cf_files[c].size());
+                    assert(r == (int) em_files[c].size());
+                }
+            }
+
+            parseClusterTranscripts(cf_files[0][0]);
+            if (DEBUG) {
+                printf("%zu clusters, %zu transcripts\n", clusters.size(), transcripts.size());
+            }
+        }
+
+        // Initializes: conditions (map), replicates, cf_files, em_files
+        void parseInputFile(const string input_file) {
+            string line;
+            ifstream ifile(input_file);
+            if (ifile.is_open()) {
+                while (getline(ifile, line)) {
+                    stringstream linestream(line);
+                    string condition;
+                    string cf_file;
+                    string em_file;
+
+                    getline(linestream, condition, '\t');
+                    linestream >> cf_file >> em_file;
+
+                    auto c = conditions.find(condition);
+                    if (c == conditions.end()) { // new condition
+                        conditions[condition] = (int)conditions.size() - 1;
+                        replicates.push_back(1);
+
+                        vector<string> cf;
+                        cf.push_back(cf_file);
+                        cf_files.push_back(cf);
+
+                        vector<string> em;
+                        em.push_back(em_file);
+                        em_files.push_back(em);
+                    } else {
+                        int c_idx = conditions[condition];
+                        replicates[c_idx]++;
+
+                        cf_files[c_idx].push_back(cf_file);
+                        em_files[c_idx].push_back(em_file);
+                    }
+                }
+                ifile.close();
+            } else {
+                fprintf(stderr, "Unable to open %s\n", input_file.c_str());
+            }
+        }
+
+        void parseClusterTranscripts(const string cf) {
+            if (DEBUG) printf("parseClusterTranscript: %s\n", cf.c_str());
+
+            fstream istream(cf, ios::in | ios::binary);
+            SelectedKey sk;
+            int buffer_size = 200000000;
+            ::google::protobuf::uint8 * buffer =
+            new ::google::protobuf::uint8[buffer_size];
+            // each sk is a cluster of sigmers
+            // sk.tids are all the transcripts associated with the cluster
+            while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
+                vector<string> transcript_list;
+                string cluster = sk.gid();
+                for (int i = 0; i < sk.tids_size(); i++) {
+                    string transcript = sk.tids(i);
+                    if (transcript_cluster_map.find(transcript) != transcript_cluster_map.end()) {
+                        printf("WARNING: Transcript-cluster (%s,%s) already exists in map (new cluster %s with %i transcripts); original cluster with %zu transcripts\n", sk.tids(i).c_str(), transcript_cluster_map[transcript].c_str(), cluster.c_str(), sk.tids_size(), cluster_transcripts_map[transcript_cluster_map[transcript]].size());
+                    } else {
+                        transcript_list.push_back(transcript);
+                        transcript_cluster_map[transcript] = cluster;
+                        transcripts[transcript] = transcript_list.size() - 1;
+                    }
+                }
+
+                if (transcript_list.size() > 0) {
+                    if (cluster_transcripts_map.find(sk.gid()) != cluster_transcripts_map.end()) {
+                        printf("Cluster %s already in map\n", cluster.c_str());
+                    } else {
+                        clusters[cluster] = clusters.size() - 1;
+                    }
+                    cluster_transcripts_map[sk.gid()] = transcript_list;
+                }
+            }
+            istream.close();
+        }
+
         vector<string> split(const string &s, char delim) {
             vector<string> elems;
             stringstream ss(s);
@@ -342,7 +424,7 @@ namespace rs {
             }
             return elems;
         }
-        
+
         void run(){
             cout << "done" << endl;
         }
@@ -357,13 +439,30 @@ namespace rs {
         vector<vector<int>> F;
         map<SelectedKey_Key, int> parent; //G
         
-        map<string, vector<string>> cluster_transcripts_map; // cluster -> list of associated transcripts
-        map<string, string> transcript_cluster_map; // transcript -> corresponding cluster
+
         map<string, vector<vector<int>>> cluster_theta_map; // cluster -> theta matrix of occurrences of sigmers per transcript
         map<string, vector<vector<int>>> cluster_Fmatrix_map; // cluster -> F matrix: sigmers x transcripts (num of sigmers per transcript)
         map<string, vector<int>> cluster_L_map; // cluster -> L vector, length = number of transcripts (#sigmers per transcript)
         map<string, vector<vector<int>>> cluster_G_map; // cluster -> #replicates x #sigmers -> index of transcript
-        int size_condition = 1; // TODO: calc size factor for condition
+
+        /***********************************************************/
+        map<string, int> conditions; // condition name -> index
+        vector<int> replicates; // #conditions: number of replicates
+        vector<vector<string>> cf_files; // #conditions x #replicates: cf file names
+        vector<vector<string>> em_files; // #conditions x #replicates: em file names
+
+        map<string, vector<string>> cluster_transcripts_map; // cluster -> list of associated transcripts
+        map<string, string> transcript_cluster_map; // transcript -> corresponding cluster
+        map<string, int> clusters; // cluster id -> index
+        map<string, int> transcripts; // transcript id -> index (per cluster)
+
+        vector<vector<vector<vector<int>>>> theta_data; // #conditions x #clusters x #replicates x #transcripts: occurrences of (general) sigmers per transcript
+        vector<vector<vector<vector<int>>>> F_data; // #conditions x #clusters x #sigmers x #transcripts: num (specific) sigmer per transcript
+        vector<vector<vector<int>>> L_data; // #conditions x #clusters x #transcripts: num (general) sigmers per transcript
+        vector<vector<vector<vector<int>>>> G_data; // #conditions x #clusters x #replicates x #sigmers: transcript id (from transcripts)
+
+        double size_replicate; // 1 value across all conditions
+        vector<double> size_conditions; // #conditions
         
         
     };
@@ -371,6 +470,7 @@ namespace rs {
 
 int main(int argc, char *argv[]) {
     google::ParseCommandLineFlags(&argc, &argv, true);
-    rs::GibbsSampler gs(FLAGS_num_replicates, FLAGS_em_file_prefix);
+    rs::GibbsSampler gs(FLAGS_input_file);
+    //rs::GibbsSampler gs(FLAGS_num_replicates, FLAGS_em_file_prefix);
     gs.run();
 }

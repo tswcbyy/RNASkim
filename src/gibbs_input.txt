@@ -1,0 +1,8 @@
+treated	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated1.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated1_em
+treated	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated2.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated2_em
+treated	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated3.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated3_em
+treated	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated4.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/treated4_em
+normal	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal1.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal1_em
+normal	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal2.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal2_em
+normal	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal3.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal3_em
+normal	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal4.cf	/home/liuli.chen/rnaskim/RNASkim/simulation/RNASkim/normal4_em
