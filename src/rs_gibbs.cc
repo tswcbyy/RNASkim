@@ -360,19 +360,19 @@ namespace rs {
             // theta_data
             parseEMData();
             if (DEBUG) {
-
+                printf("EM data: complete\n");
             }
 
             // F_data, G_data, L_data
             parseCFData(cf_files[0][0]);
             if (DEBUG) {
-
+                printf("CF data: complete\n");
             }
 
             // size_replicates, size_conditions
             calcSizeFactors();
             if (DEBUG) {
-
+                printf("Size factors: complete\n");
             }
 
             /* Gibbs:
@@ -391,15 +391,17 @@ namespace rs {
              
              */
 
+            if (DEBUG) printf("Gibbs sampling:\n");
             for (auto cond_it : conditions) {
                 int cond_idx = cond_it.second;
+                string condition = cond_it.first;
+                if (DEBUG) printf("\tCondition: %s\n", condition.c_str());
 
                 for (int i = 0; i < 1000; i++) {
+                    if (DEBUG && i%20 == 0) printf(".");
                     for (auto cl_it : clusters) {
-
+                        int cl_idx = cl_it.second;
                         for (int r = 0; r < replicates[cond_idx]; r++) {
-                            int cl_idx = cl_it.second;
-
                             gibbsG(cond_idx, r, cl_idx);
                             gibbsTheta(cond_idx, r, cl_idx);
                         }
@@ -408,6 +410,8 @@ namespace rs {
 
                     output();
                 }
+
+                if (DEBUG) printf("\tcomplete\n");
             }
         }
 
@@ -668,7 +672,27 @@ namespace rs {
         }
 
         void gibbsG(int cond_idx, int r, int cl_idx) {
+            // initializations
+            vector<int> G = G_data[cond_idx][cl_idx][r]; // #sigmers: transcript id (from transcripts)
+            vector<int> theta = theta_data[cond_idx][cl_idx][r]; // #transcripts: occurrences of (general) sigmers per transcript
+            vector<vector<int>> F = F_data[cl_idx]; // #sigmers x #transcripts
+            vector<int> L = L_data[cl_idx]; // #transcripts
 
+            int sigmer_count = (int)G.size();
+            for (int s = 0; s < sigmer_count; s++) {
+                vector<double> G_probs;
+                // choose random t from distribution over all t: theta[r][t] * F[s][t] / L[t]
+                for (int t = 0; t < (int)theta.size(); t++) {
+                    if (L[t] == 0)
+                        G_probs.push_back(0);
+                    else
+                        G_probs.push_back(theta[t] * F[s][t] / L[t]);
+                }
+                boost::random::discrete_distribution<> distribution(G_probs.begin(), G_probs.end());
+                G[s] = distribution(generator);
+            }
+
+            G_data[cond_idx][cl_idx][r] = G;
         }
 
         void gibbsTheta(int cond_idx, int r, int cl_idx) {
@@ -680,7 +704,7 @@ namespace rs {
         }
 
         void output() {
-            
+
         }
 
         vector<string> split(const string &s, char delim) {
@@ -699,7 +723,7 @@ namespace rs {
             nth_element(v.begin(), v.begin()+n, v.end());
 
             if (v.size()%2 == 1) {
-                return (double)v[n];
+                return v[n];
             } else {
                 return 0.5 * (v[n] + v[n-1]);
             }
@@ -727,6 +751,8 @@ namespace rs {
 
         vector<vector<double>> size_replicates; // #conditions x #replicates
         vector<double> size_conditions; // #conditions
+
+        std::default_random_engine generator;
     };
 }
 
