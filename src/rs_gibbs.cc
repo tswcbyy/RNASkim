@@ -414,6 +414,9 @@ namespace rs {
                     if (DEBUG && i%20 == 0) printf(".");
                     for (auto cl_it : clusters) {
                         int cl_idx = cl_it.second;
+                        if (zero_cluster_map.find(cl_idx) != zero_cluster_map.end())
+                            continue;
+
                         for (int r = 0; r < replicates[cond_idx]; r++) {
                             gibbsG(cond_idx, r, cl_idx);
                             gibbsTheta(cond_idx, r, cl_idx);
@@ -637,6 +640,10 @@ namespace rs {
 
             // calculate #sigmers per cluster per replicate
             vector<vector<vector<int>>> sigmer_data(conditions.size()); // #conditions x #replicates x #clusters: #sigmers (from theta_data)
+
+            // #cluster ID : #0s
+            vector<int> zero_data(clusters.size(), 0);
+
             for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
                 vector<vector<int>> sigmer_condition(replicates[cond_idx]);
 
@@ -649,13 +656,21 @@ namespace rs {
                         vector<int> sigmer_cluster = theta_data[cond_idx][cl_idx][r];
                         sigmer_replicate[cl_idx] = std::accumulate(sigmer_cluster.begin(), sigmer_cluster.end(), 0);
                         num_sigmers += sigmer_replicate[cl_idx];
-                        if (sigmer_replicate[cl_idx] == 0)
+                        if (sigmer_replicate[cl_idx] == 0) {
                             zeros++;
+                            zero_data[cl_idx]++;
+                        }
                     }
                     if (DEBUG) printf("\t%i/%zu clusters with 0 sigmers from theta data [condition:%i, replicate:%i]\n", zeros, clusters.size(), cond_idx, r);
                     sigmer_condition[r] = sigmer_replicate;
                 }
                 sigmer_data[cond_idx] = sigmer_condition;
+            }
+
+            // populate zero_cluster_map
+            for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
+                if (zero_data[cl_idx] == num_replicates)
+                    zero_cluster_map[cl_idx] = 1;
             }
 
             // calculate size factors per replicate
@@ -666,15 +681,26 @@ namespace rs {
             for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
                 vector<double> size_replicates_cond(replicates[cond_idx]);
                 for (int r = 0; r < replicates[cond_idx]; r++) {
+
+                    int zeros = 0;
+                    vector<double> rep_temp;
+                    for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
+                        if (zero_cluster_map.find(cl_idx) == zero_cluster_map.end()) {
+                            rep_temp.push_back((double)sigmer_data[cond_idx][r][cl_idx]);
+                            if (sigmer_data[cond_idx][r][cl_idx] == 0)
+                                zeros++;
+                        }
+                    }
+
+                    if (DEBUG) printf("\tPostfilter: %i/%zu clusters with 0 sigmers from theta data [condition:%i, replicate:%i]\n", zeros, rep_temp.size(), cond_idx, r);
+
                     // find median of sigmer_replicate (divide by cross condition data first)
-                    vector<double> rep_temp(sigmer_data[cond_idx][r].begin(), sigmer_data[cond_idx][r].end());
                     for (auto i = rep_temp.begin(); i != rep_temp.end(); ++i) {
                         (*i) /= denom;
                     }
 
                     double med = median(rep_temp);
                     size_replicates_cond[r] = med;
-                    printf("\t%f\n", med);
                 }
                 size_replicates[cond_idx] = size_replicates_cond;
             }
@@ -717,12 +743,10 @@ namespace rs {
                     vector<vector<int>> temp = theta_data[cond_idx][cl_idx];
                     vector<vector<double>> theta(replicates[cond_idx]); // #replicates x #transcripts
                     for (int r = 0; r < replicates[cond_idx]; r++) {
-                        vector<double> theta_replicate(num_transcripts);
+                        vector<double> theta_replicate(num_transcripts, 0);
 
                         double sz = size_replicates[cond_idx][r];
-                        if (sz == 0) {
-                            printf("WARNING: size replicate = 0 [condition: %i, replicate %i]\n", cond_idx, r);
-                        } else {
+                        if (sz != 0 && zero_cluster_map.find(cl_idx) == zero_cluster_map.end()) {
                             for (int t = 0; t < num_transcripts; t++) {
                                 theta_replicate[t] = (double) temp[r][t] / sz;
                             }
@@ -742,9 +766,7 @@ namespace rs {
 
                     // normalize
                     double norm_factor = std::accumulate(m_data_cluster.begin(), m_data_cluster.end(), 0.0);
-                    if (norm_factor == 0) {
-                        printf("WARNING: m normalization factor = 0 [condition: %i]\n", cond_idx);
-                    } else {
+                    if (norm_factor != 0) {
                         for (auto m_it = m_data_cluster.begin(); m_it != m_data_cluster.end(); ++m_it) {
                             (*m_it) /= norm_factor;
                         }
@@ -849,6 +871,8 @@ namespace rs {
 
         vector<vector<double>> size_replicates; // #conditions x #replicates
         vector<double> size_conditions; // #conditions
+
+        map<int, int> zero_cluster_map; // cluster ID -> no sigmers across all replicates
 
         std::default_random_engine generator;
     };
