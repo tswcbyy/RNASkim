@@ -372,8 +372,21 @@ namespace rs {
             // size_replicates, size_conditions
             calcSizeFactors();
             if (DEBUG) {
-                printf("Size factors: complete\n");
+                printf("Checking size factors ...\n");
+                for (auto cond_it : conditions) {
+                    string condition = cond_it.first;
+                    int cond_idx = cond_it.second;
+                    printf("\t%s:\t%f\n", condition.c_str(), size_conditions[cond_idx]);
+                    vector<double> sz = size_replicates[cond_idx];
+                    for (double sz_factor : sz) {
+                        printf("\t\t%f\n", sz_factor);
+                    }
+                }
             }
+
+            // m_data: first divide the theta vector for each replicate by its size factor. Then take average of all the replicates for one condition. Finally normalize it.
+            initMData();
+
 
             /* Gibbs:
              1) For each cluster c, for each replicate r, for each sigmer occurrence s: re-sample G (transcript)
@@ -617,6 +630,7 @@ namespace rs {
         }
 
         void calcSizeFactors() {
+            if (DEBUG) printf("Calculating size factors...\n");
             int num_replicates = std::accumulate(replicates.begin(), replicates.end(), 0);
             int num_sigmers = 0;
             // size_replicate: median (over C clusters) for (#sigmers in cluster c for replicate r / sum #sigmers across all replicates in cluster c ^ 1/#replicates
@@ -630,11 +644,15 @@ namespace rs {
                     // #clusters: #sigmers that occur per cluster in this replicate
                     vector<int> sigmer_replicate(clusters.size());
 
+                    int zeros = 0;
                     for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
                         vector<int> sigmer_cluster = theta_data[cond_idx][cl_idx][r];
                         sigmer_replicate[cl_idx] = std::accumulate(sigmer_cluster.begin(), sigmer_cluster.end(), 0);
                         num_sigmers += sigmer_replicate[cl_idx];
+                        if (sigmer_replicate[cl_idx] == 0)
+                            zeros++;
                     }
+                    if (DEBUG) printf("\t%i/%zu clusters with 0 sigmers from theta data [condition:%i, replicate:%i]\n", zeros, clusters.size(), cond_idx, r);
                     sigmer_condition[r] = sigmer_replicate;
                 }
                 sigmer_data[cond_idx] = sigmer_condition;
@@ -643,6 +661,8 @@ namespace rs {
             // calculate size factors per replicate
             size_replicates.resize(conditions.size());
             double denom = pow(num_sigmers, 1 / (double)num_replicates);
+            if (DEBUG) printf("\t#sigmers: %i\n\t#replicates = %i\n\t#s^(1/#r) = %f\n", num_sigmers, num_replicates, denom);
+
             for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
                 vector<double> size_replicates_cond(replicates[cond_idx]);
                 for (int r = 0; r < replicates[cond_idx]; r++) {
@@ -652,7 +672,9 @@ namespace rs {
                         (*i) /= denom;
                     }
 
-                    size_replicates_cond[r] = median(rep_temp);
+                    double med = median(rep_temp);
+                    size_replicates_cond[r] = med;
+                    printf("\t%f\n", med);
                 }
                 size_replicates[cond_idx] = size_replicates_cond;
             }
@@ -671,7 +693,74 @@ namespace rs {
             }
         }
 
+        void initMData() {
+            /*
+                1) divide each theta vector by size_replicate
+                2) average over all replicates (per condition)
+                3) normalize
+             */
+
+            // vector<vector<vector<double>>> m_data; #conditions x #clusters x #transcripts: probability that general sigmer belongs to a transcript
+
+            m_data.resize(conditions.size()); // #conditions x #clusters x #transcripts
+            for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
+                vector<vector<double>> m_data_condition(clusters.size()); // #clusters x #transcripts
+
+                for (auto cl_it : clusters) {
+                    string cluster = cl_it.first;
+                    int cl_idx = cl_it.second;
+
+                    int num_transcripts = (int)cluster_transcripts_map[cluster].size();
+                    vector<double> m_data_cluster(num_transcripts, 0);
+
+                    // divide each theta vector by size_replicate
+                    vector<vector<int>> temp = theta_data[cond_idx][cl_idx];
+                    vector<vector<double>> theta(replicates[cond_idx]); // #replicates x #transcripts
+                    for (int r = 0; r < replicates[cond_idx]; r++) {
+                        vector<double> theta_replicate(num_transcripts);
+
+                        double sz = size_replicates[cond_idx][r];
+                        if (sz == 0) {
+                            printf("WARNING: size replicate = 0 [condition: %i, replicate %i]\n", cond_idx, r);
+                        } else {
+                            for (int t = 0; t < num_transcripts; t++) {
+                                theta_replicate[t] = (double) temp[r][t] / sz;
+                            }
+                        }
+
+                        theta[r] = theta_replicate;
+                    }
+
+                    // avg theta over all replicates
+                    for (int t = 0; t < num_transcripts; t++) {
+                        double sum = 0;
+                        for (int r = 0; r < replicates[cond_idx]; r++) {
+                            sum += theta[r][t];
+                        }
+                        m_data_cluster[t] = sum / replicates[cond_idx];
+                    }
+
+                    // normalize
+                    double norm_factor = std::accumulate(m_data_cluster.begin(), m_data_cluster.end(), 0.0);
+                    if (norm_factor == 0) {
+                        printf("WARNING: m normalization factor = 0 [condition: %i]\n", cond_idx);
+                    } else {
+                        for (auto m_it = m_data_cluster.begin(); m_it != m_data_cluster.end(); ++m_it) {
+                            (*m_it) /= norm_factor;
+                        }
+                    }
+
+                    m_data_condition[cl_idx] = m_data_cluster;
+                }
+
+                m_data[cond_idx] = m_data_condition;
+            }
+        }
+
         void gibbsG(int cond_idx, int r, int cl_idx) {
+            // 1) For each cluster c, for each replicate r, for each sigmer occurrence s: re-sample G (transcript)
+            //      P(G = t | ...) = theta_t * F_s,t / L_t
+
             // initializations
             vector<int> G = G_data[cond_idx][cl_idx][r]; // #sigmers: transcript id (from transcripts)
             vector<int> theta = theta_data[cond_idx][cl_idx][r]; // #transcripts: occurrences of (general) sigmers per transcript
@@ -696,7 +785,16 @@ namespace rs {
         }
 
         void gibbsTheta(int cond_idx, int r, int cl_idx) {
+            // For each replicate cluster c, for each replicate r:
+            //      P(theta_rt | ...) = P(theta_r,t | m_t) * (theta_r,t / (sum_(i != t) theta_r,i + theta_r,t))^(#G == t)
 
+            vector<int> theta = theta_data[cond_idx][cl_idx][r]; // #transcripts: occurrences of (general) sigmers per transcript
+            int num_transcripts = (int)theta.size();
+            for (int t = 0; t < num_transcripts; t++) {
+                vector<double> theta_probs(num_transcripts, 0);
+            }
+
+            theta_data[cond_idx][cl_idx][r] = theta;
         }
 
         void gibbsM(int cond_idx, int cl_idx) {
