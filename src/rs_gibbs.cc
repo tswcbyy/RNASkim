@@ -627,10 +627,7 @@ namespace rs {
                 q = std::max(round(q), 1.);
             }
 
-            if (q > 10) {
-                printf("FIX ME WHEN LARGE NUMBERS CAN BE HANDLED: WARNING: q=%f, theta=%i\n", q, theta);
-                q = 10;
-            }
+            q = 1; // TODO: FIX ME WHEN FACTORIALS CAN BE HANDLED AND LOCFIT IS INCLUDED
 
             int a = theta + round(q) - 1;
             unsigned long long int c = choose(a, theta);
@@ -701,13 +698,7 @@ namespace rs {
                     for (int i = 0; i < sz; i++) {
                         int th = i + 1;
 
-                        if (v != 0 && m != 0) {
-                            prob_theta = negBinomialDist(th, m, v, sz);
-                        } else {
-                            printf("WARNING: v[%e], m[%e] for \n", v, m);
-                            prob_theta = 0;
-                        }
-
+                        prob_theta = negBinomialDist(th, m, v, sz);
                         denom = th_sum - (double)theta[t] + (double)th;
                         if (denom == 0) {
                             printf("WARNING: sum(theta) = 0 for cond[%i], cluster[%i], tr[%i], theta[%i]\n", cond_idx, cl_idx, t, theta[t]);
@@ -789,24 +780,27 @@ namespace rs {
         }
 
         unsigned long long int choose(int a, int b) {
-            unsigned long long int r = 1, numer = 1, denom = 1;
+            unsigned long long int r = 1, numer = 1, denom = 1, temp;
             assert(a >= b);
+            assert(a >= 0  && b >= 0);
 
             b = std::min(b, a - b);
 
-            try {
-                for (int i = 0; i < b; i++) {
-                    if (numer%(i + 1) == 0)
-                        numer /= (i + 1);
-                    else
-                        denom *= (i + 1);
+            for (int i = 0; i < b; i++) {
+                if (numer%(i + 1) == 0)
+                    numer /= (i + 1);
+                else
+                    denom *= (i + 1);
 
-                    numer *= (a - i);
+                temp = numer * (a - 1);
+                // assert(temp >= numer);
+                if (temp >= numer) {
+                    printf("ERROR: overflow on C(%i, %i)\n", a, b);
+                    return numer / denom;
                 }
-            } catch (std::exception &e) {
-                cout << e.what() << endl;
+                numer *= (a - i);
             }
-            
+
             r = numer / denom;
             return r;
         }
