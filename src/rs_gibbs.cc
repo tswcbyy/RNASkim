@@ -17,8 +17,11 @@
 #include "rs_estimate_lib.h"
 #include "proto/rnasigs.pb.h"
 #include "proto_data.h"
-
 #include <boost/random/discrete_distribution.hpp>
+
+extern "C" {
+    #include "locfit/local.h"
+}
 
 using std::string;
 using std::vector;
