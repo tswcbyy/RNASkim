@@ -489,6 +489,7 @@ namespace rs {
             v_data.resize(conditions.size()); // #conditions x #clusters x #transcripts
 
             for (auto cond_it : conditions) {
+                map<double, double> m_var; // LOCFIT m -> w
                 int cond_idx = cond_it.second;
                 string condition = cond_it.first;
                 vector<double> w_condition;
@@ -507,9 +508,6 @@ namespace rs {
                     vector<double> v_cluster(num_transcripts, 0.000001); // TODO: fixme
                     v_condition[cl_idx] = v_cluster;
                 }
-
-                std::ofstream var_file;
-                var_file.open ("vargibbs_" + condition + ".dat", ios::out);
 
                 for (auto t_it : transcripts) {
                     string transcript = t_it.first;
@@ -535,17 +533,60 @@ namespace rs {
                     w_condition.push_back(wt);
                     mw_condition.push_back(m);
                     z_condition[cl_idx][t_idx] = zt;
-
-                    var_file << m << " " << wt << "\n";
                 }
                 w[cond_idx] = w_condition;
                 mw[cond_idx] = mw_condition;
                 z[cond_idx] = z_condition;
 
-                var_file.close();
-
                 // TODO: LOCFIT to find wc(m) based on (mw, w)
+                setuplf();
+                if (DEBUG) printf("calcMVariance: Creating LOCFIT vars mw and w...\n");
+
+                char namebuf[256];
+                sprintf(namebuf, "mw");
+                vari* loc_mw = createvar(namebuf,STREGULAR,mw_condition.size(),VDOUBLE);
+                for (size_t i = 0; i < mw_condition.size(); ++i) {
+                    loc_mw->dpr[i] = mw_condition[i];
+                }
+                sprintf(namebuf, "w");
+                vari* loc_w = createvar(namebuf,STREGULAR,w_condition.size(),VDOUBLE);
+                for (size_t i = 0; i < w_condition.size(); ++i) {
+                    loc_w->dpr[i] = w_condition[i];
+                }
+                char locfit_cmd[2048];
+                sprintf(locfit_cmd, "locfit w~mw");
+
+                locfit_dispatch(locfit_cmd);
+
+                sprintf(namebuf, "m");
+                vari* m_domain = createvar(namebuf,STREGULAR,mw_condition.size(),VDOUBLE);
+                for (size_t i = 0; i < mw_condition.size(); ++i) {
+                    m_domain->dpr[i] = mw_condition[i];
+                }
+
+                sprintf(locfit_cmd, "w_variance=predict m");
+                locfit_dispatch(locfit_cmd);
+
+                int n = 0;
+                sprintf(namebuf, "w_variance");
+                vari* w = findvar(namebuf, 1, &n);
+                assert(w != NULL);
+
+                for (size_t i = 0; i < w->n; ++i) {
+                    m_var[mw_condition[i]] = w->dpr[i];
+                }
+
                 // v = m + wc(m) - z
+                for (auto t_it : transcripts) {
+                    string transcript = t_it.first;
+                    int t_idx = t_it.second;
+                    string cluster = transcript_cluster_map[transcript];
+                    int cl_idx = clusters[cluster];
+
+                    double m = m_data[cond_idx][cl_idx][t_idx];
+
+                    v_condition[cl_idx][t_idx] = m_var[m] - z_condition[cl_idx][t_idx];
+                }
                 v_data[cond_idx] = v_condition;
             }
         }
@@ -630,7 +671,7 @@ namespace rs {
                 q = std::max(round(q), 1.);
             }
 
-            q = 1; // TODO: FIX ME WHEN FACTORIALS CAN BE HANDLED AND LOCFIT IS INCLUDED
+            // q = 1; TODO: FIX ME WHEN LOCFIT IS INCLUDED
 
             int a = theta + round(q) - 1;
             unsigned long long int c = choose(a, theta);
