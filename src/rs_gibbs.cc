@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <random>
 #include <math.h>
+#include <errno.h>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -19,9 +20,9 @@
 #include "proto_data.h"
 #include <boost/random/discrete_distribution.hpp>
 
-extern "C" {
+/*extern "C" {
     #include "locfit/local.h"
-}
+}*/
 
 using std::string;
 using std::vector;
@@ -29,6 +30,7 @@ using std::map;
 using std::cout;
 using std::endl;
 using std::fstream;
+using std::ofstream;
 using std::ifstream;
 using std::ios;
 using std::stringstream;
@@ -138,8 +140,22 @@ namespace rs {
                 }
             }
 
+            // find max SrSc and calc +5 for ln_factorials
+            size_t max_size = 0;
+            for (size_t c = 0; c < size_conditions.size(); c++) {
+                for (size_t r = 0; r < size_replicates[c].size(); r++) {
+                    max_size = std::max((size_t)round(size_conditions[c] * size_replicates[c][r]), max_size);
+                }
+            }
+            if (DEBUG) printf("Maximum SrSc = %zu\n", max_size);
+            ln_factorials.resize(1, 0); // initialize ln(0!)
+            calcLogFactorials(max_size + 5);
+            if (DEBUG) printf("Initialized ln(n!) up to ln(%zu!) = %f\n", ln_factorials.size() - 1, ln_factorials[ln_factorials.size() - 1]);
+
+
             // m_data: first divide the theta vector for each replicate by its size factor. Then take average of all the replicates for one condition. Finally normalize it.
             initMData();
+            output(ios::out | ios::trunc);
             if (DEBUG) printf("initMData: complete\n");
 
 
@@ -171,6 +187,7 @@ namespace rs {
                     if (DEBUG) printf("\t\t\tcalcMVariance: complete\n");
                     for (auto cl_it : clusters) {
                         int cl_idx = cl_it.second;
+                        if (DEBUG) printf("\t\t\t\tCluster [%i:%s]...\n", cl_idx, cl_it.first.c_str());
                         if (zero_cluster_map.find(cl_idx) != zero_cluster_map.end()) {
                             printf("\t\t\tSKIPPING cluster %s\n", cl_it.first.c_str());
                             continue;
@@ -184,7 +201,7 @@ namespace rs {
                         gibbsM(cond_idx, cl_idx, i);
                     }
 
-                    output();
+                    output(ios::out | ios::app);
                 }
 
                 if (DEBUG) printf("\tcomplete\n");
@@ -538,6 +555,57 @@ namespace rs {
                 mw[cond_idx] = mw_condition;
                 z[cond_idx] = z_condition;
 
+                // create files for R consumption
+                ofstream ofile;
+                ofile.open (R_file, ios::out | ios::trunc);
+                ofile << "m\tw" << endl;
+
+                for (size_t i = 0; i < mw_condition.size(); i++) {
+                    ofile << mw_condition[i] << "\t" << w_condition[i] << endl;
+                }
+
+                ofile.close();
+
+                system("Rscript gibbs.R");
+
+                string line;
+                ifstream ifile;
+                ifile.open(R_file, ios::in);
+                if (ifile.is_open()) {
+                    int l = 0;
+                    while (getline(ifile, line)) {
+                        vector<string> tokens = split(line, '\t');
+                        double w = atof(tokens[1].c_str());
+                        double m = mw_condition[l];
+                        m_var[m] = w;
+                        l++;
+                    }
+                    ifile.close();
+                } else {
+                    printf("Failed to open %s\n", R_file.c_str());
+                }
+
+                // v = m + wc(m) - z
+                for (auto t_it : transcripts) {
+                    string transcript = t_it.first;
+                    int t_idx = t_it.second;
+                    string cluster = transcript_cluster_map[transcript];
+                    int cl_idx = clusters[cluster];
+
+                    double m = m_data[cond_idx][cl_idx][t_idx];
+                    if (m != 0) {
+                        assert(m_var.find(m) != m_var.end());
+                        v_condition[cl_idx][t_idx] = m_var[m] - z_condition[cl_idx][t_idx];
+                        if (v_condition[cl_idx][t_idx] <= 0) {
+                            printf("WARNING: variance <= 0: w(%e) - z = %e - %e = %e\n", m, m_var[m], z_condition[cl_idx][t_idx], v_condition[cl_idx][t_idx]);
+                        }
+                    } else
+                        v_condition[cl_idx][t_idx] = 0;
+                }
+
+                v_data[cond_idx] = v_condition;
+
+                /*
                 // TODO: LOCFIT to find wc(m) based on (mw, w)
                 setuplf();
                 if (DEBUG) printf("calcMVariance: Creating LOCFIT vars mw and w...\n");
@@ -574,20 +642,8 @@ namespace rs {
 
                 for (size_t i = 0; i < w->n; ++i) {
                     m_var[mw_condition[i]] = w->dpr[i];
-                }
+                }*/
 
-                // v = m + wc(m) - z
-                for (auto t_it : transcripts) {
-                    string transcript = t_it.first;
-                    int t_idx = t_it.second;
-                    string cluster = transcript_cluster_map[transcript];
-                    int cl_idx = clusters[cluster];
-
-                    double m = m_data[cond_idx][cl_idx][t_idx];
-
-                    v_condition[cl_idx][t_idx] = m_var[m] - z_condition[cl_idx][t_idx];
-                }
-                v_data[cond_idx] = v_condition;
             }
         }
 
@@ -657,9 +713,9 @@ namespace rs {
             }
         }
 
+        // returns Pr(theta | m)
         double negBinomialDist(int theta, double m, double v, int sz) {
             double p, q, s = (double) sz;
-
             if (s * v - m == 0) {
                 printf("WARNING: SrScv - m = 0\n");
                 return 0;
@@ -671,15 +727,22 @@ namespace rs {
                 q = std::max(round(q), 1.);
             }
 
-            // q = 1; TODO: FIX ME WHEN LOCFIT IS INCLUDED
+            size_t a = theta + round(q) - 1;
+            double r = lnFactorial(a) - lnFactorial((size_t)theta) - lnFactorial(a - theta);
+            r += q * log(1 - p) + (double)theta * log(p);
 
-            int a = theta + round(q) - 1;
-            unsigned long long int c = choose(a, theta);
-            if (q > 10)
-                printf("WARNING: C(%i, %i) = %llu\n", a, theta, c);
-            double r = ((double)c * pow(1 - p, q) * pow(p, theta));
+            if (errno != 0) {
+                printf("ERROR: error occurred in negBinomialDist: %s\n", strerror(errno));
+                assert(false);
+            }
+            errno = 0;
+            double e = exp(r);
+            if (errno == ERANGE) {
+                printf("ERROR: exp(%e) = %e overflows\n", r, e);
+                assert(false);
+            }
 
-            return r;
+            return e;
         }
 
         void gibbsG(int cond_idx, int r, int cl_idx) {
@@ -710,7 +773,7 @@ namespace rs {
         }
 
         void gibbsTheta(int cond_idx, int r, int cl_idx) {
-            printf("gibbsTheta:  cond[%i], r[%i], cluster[%i]\n", cond_idx, r, cl_idx);
+            printf("\t\t\t\tgibbsTheta: cond[%i], r[%i], cluster[%i]\n", cond_idx, r, cl_idx);
             // For each replicate cluster c, for each replicate r:
             //      P(theta_rt | ...) = P(theta_r,t | m_t) * (theta_r,t / (sum_(i != t) theta_r,i + theta_r,t))^(#G == t)
 
@@ -741,14 +804,22 @@ namespace rs {
                 if (v != 0 && m != 0) {
                     for (int i = 0; i < sz; i++) {
                         int th = i + 1;
-
                         prob_theta = negBinomialDist(th, m, v, sz);
                         denom = th_sum - (double)theta[t] + (double)th;
                         if (denom == 0) {
                             printf("WARNING: sum(theta) = 0 for cond[%i], cluster[%i], tr[%i], theta[%i]\n", cond_idx, cl_idx, t, theta[t]);
                         } else {
-                            factor = (double)th / denom;
-                            factor = pow(factor, g_transcript);
+                            double frac = (double)th / denom;
+                            if (errno != 0) {
+                                printf("ERROR: error occurred in gibbsTheta: %s\n", strerror(errno));
+                                assert(false);
+                            }
+                            errno = 0;
+                            factor = pow(frac, g_transcript); // TODO: ln this
+                            if (errno == ERANGE) {
+                                printf("ERROR: pow overflowed: pow(factor, g_transcript) = %e^%i = %e\n", frac, g_transcript, factor);
+                                assert(false);
+                            }
                             theta_probs[i] = (prob_theta * factor);
                         }
                     }
@@ -797,8 +868,20 @@ namespace rs {
             }
         }
 
-        void output() {
+        void output(std::ios_base::openmode mode) {
+            for (auto cond_it : conditions) {
+                int cond_idx = cond_it.second;
+                string condition = cond_it.first;
+                ofstream m_file;
+                m_file.open ("gibbs_m_" + condition + ".dat", mode);
+                for (int cl_idx = 0; cl_idx < (int)m_data[cond_idx].size(); cl_idx++) {
+                    for (int t_idx = 0; t_idx < (int)m_data[cond_idx][cl_idx].size(); t_idx++)
+                        m_file << m_data[cond_idx][cl_idx][t_idx] << "\t";
+                }
 
+                m_file << endl;
+                m_file.close();
+            }
         }
 
         vector<string> split(const string &s, char delim) {
@@ -823,33 +906,28 @@ namespace rs {
             }
         }
 
-        unsigned long long int choose(int a, int b) {
-            unsigned long long int r = 1, numer = 1, denom = 1, temp;
-            assert(a >= b);
-            assert(a >= 0  && b >= 0);
+        void calcLogFactorials(size_t n) {
+            if (ln_factorials.size() > n)
+                return;
 
-            b = std::min(b, a - b);
-
-            for (int i = 0; i < b; i++) {
-                if (numer%(i + 1) == 0)
-                    numer /= (i + 1);
-                else
-                    denom *= (i + 1);
-
-                temp = numer * (a - 1);
-                // assert(temp >= numer);
-                if (temp >= numer) {
-                    printf("ERROR: overflow on C(%i, %i)\n", a, b);
-                    return numer / denom;
-                }
-                numer *= (a - i);
+            size_t c = ln_factorials.size();
+            ln_factorials.resize(n + 1, 0);
+            for (; c < ln_factorials.size(); c++) {
+                ln_factorials[c] = ln_factorials[c-1] + log((double)c);
             }
-
-            r = numer / denom;
-            return r;
         }
 
-        void run(){
+        double lnFactorial(size_t n) {
+            if (n < ln_factorials.size()) {
+                return ln_factorials[n];
+            }
+
+            if (DEBUG) printf("Extending ln_factorials from %zu to %zu\n", ln_factorials.size() - 1, n);
+            calcLogFactorials(n);
+            return ln_factorials[n];
+        }
+
+        void run() {
             cout << "done" << endl;
         }
     private:
@@ -876,9 +954,12 @@ namespace rs {
         vector<vector<double>> size_replicates; // #conditions x #replicates
         vector<double> size_conditions; // #conditions
 
+        vector<double> ln_factorials; // ln_factorials[i] = ln(i!) = ln(1) + ln(2) + ln(3) ... + ln(i)
+
         map<int, int> zero_cluster_map; // cluster ID -> no sigmers across all replicates
 
         std::default_random_engine generator;
+        string R_file = "rsgibbs_locfit.dat"; // Note: if this value is edited, ensure that gibbs.R is also adjusted accordingly
     };
 }
 
