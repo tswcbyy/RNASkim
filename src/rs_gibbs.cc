@@ -10,6 +10,7 @@
 #include <random>
 #include <math.h>
 #include <errno.h>
+#include <chrono>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
@@ -19,6 +20,8 @@
 #include "proto/rnasigs.pb.h"
 #include "proto_data.h"
 #include <boost/random/discrete_distribution.hpp>
+#include <boost/lexical_cast.hpp>
+
 
 /*extern "C" {
     #include "locfit/local.h"
@@ -182,12 +185,12 @@ namespace rs {
                 if (DEBUG) printf("\tCondition [%i]: %s\n", cond_idx, condition.c_str());
 
                 for (int i = 0; i < num_iterations; i++) {
-                    if (DEBUG) printf("\t\tIteration %i: \n", i);
+                    if (DEBUG) printf("\t\t%s iteration %i: \n", currentDateTime().c_str(), i);
                     calcMVariance();
                     if (DEBUG) printf("\t\t\tcalcMVariance: complete\n");
                     for (auto cl_it : clusters) {
                         int cl_idx = cl_it.second;
-                        if (DEBUG) printf("\t\t\t\tCluster [%i:%s]...\n", cl_idx, cl_it.first.c_str());
+                        if (DEBUG) printf("\t\t\t\t%s Cluster [%i:%s]...\n", currentDateTime().c_str(), cl_idx, cl_it.first.c_str());
                         if (zero_cluster_map.find(cl_idx) != zero_cluster_map.end()) {
                             printf("\t\t\tSKIPPING cluster %s\n", cl_it.first.c_str());
                             continue;
@@ -522,7 +525,7 @@ namespace rs {
                     vector<double> z_cluster(num_transcripts, 0);
                     z_condition[cl_idx] = z_cluster;
 
-                    vector<double> v_cluster(num_transcripts, 0.000001); // TODO: fixme
+                    vector<double> v_cluster(num_transcripts, 0);
                     v_condition[cl_idx] = v_cluster;
                 }
 
@@ -535,7 +538,12 @@ namespace rs {
                     double wt = 0;
                     double zt = 0;
                     double m = m_data[cond_idx][cl_idx][t_idx];
-                    if (m == 0) continue;
+                    if (m == 0) {
+                        w_condition.push_back(0);
+                        mw_condition.push_back(0);
+                        z_condition[cl_idx][t_idx] = 0;
+                        continue;
+                    }
 
                     for (int r = 0; r < replicates[cond_idx]; r++) {
                         double theta = theta_data[cond_idx][cl_idx][r][t_idx];
@@ -559,6 +567,7 @@ namespace rs {
                 ofstream ofile;
                 ofile.open (R_file, ios::out | ios::trunc);
                 ofile << "m\tw" << endl;
+                ofile.precision(20);
 
                 for (size_t i = 0; i < mw_condition.size(); i++) {
                     ofile << mw_condition[i] << "\t" << w_condition[i] << endl;
@@ -570,19 +579,33 @@ namespace rs {
 
                 string line;
                 ifstream ifile;
-                ifile.open(R_file, ios::in);
+                ifile.open(Rlocfit_file, ios::in);
                 if (ifile.is_open()) {
-                    int l = 0;
+                    size_t l = 0;
                     while (getline(ifile, line)) {
                         vector<string> tokens = split(line, '\t');
-                        double w = atof(tokens[1].c_str());
+                        // m, w, default, gamma, gaussian, geom, poisson
+                        double w = boost::lexical_cast<double>(tokens[6].c_str()); // try poisson
                         double m = mw_condition[l];
                         m_var[m] = w;
+                        if (m > 0) {
+                            if (w <= 0)
+                                printf("Line %zu: %s\n", l, line.c_str());
+                            assert(w > 0);
+                        }
                         l++;
                     }
+                    assert(l == mw_condition.size());
                     ifile.close();
                 } else {
                     printf("Failed to open %s\n", R_file.c_str());
+                }
+
+                if (DEBUG) { // keep copies of the locfit output files
+                    ifstream src(Rlocfit_file);
+                    ofstream dst("rsgibbs_" + condition + ".dat", ios::trunc);
+
+                    dst << src.rdbuf();
                 }
 
                 // v = m + wc(m) - z
@@ -595,55 +618,15 @@ namespace rs {
                     double m = m_data[cond_idx][cl_idx][t_idx];
                     if (m != 0) {
                         assert(m_var.find(m) != m_var.end());
-                        v_condition[cl_idx][t_idx] = m_var[m] - z_condition[cl_idx][t_idx];
+                        v_condition[cl_idx][t_idx] = m + m_var[m] - z_condition[cl_idx][t_idx];
                         if (v_condition[cl_idx][t_idx] <= 0) {
-                            printf("WARNING: variance <= 0: w(%e) - z = %e - %e = %e\n", m, m_var[m], z_condition[cl_idx][t_idx], v_condition[cl_idx][t_idx]);
+                            printf("WARNING: variance <= 0: m + w(%e) - z = %e + %e - %e = %e\n", m, m, m_var[m], z_condition[cl_idx][t_idx], v_condition[cl_idx][t_idx]);
                         }
                     } else
                         v_condition[cl_idx][t_idx] = 0;
                 }
 
                 v_data[cond_idx] = v_condition;
-
-                /*
-                // TODO: LOCFIT to find wc(m) based on (mw, w)
-                setuplf();
-                if (DEBUG) printf("calcMVariance: Creating LOCFIT vars mw and w...\n");
-
-                char namebuf[256];
-                sprintf(namebuf, "mw");
-                vari* loc_mw = createvar(namebuf,STREGULAR,mw_condition.size(),VDOUBLE);
-                for (size_t i = 0; i < mw_condition.size(); ++i) {
-                    loc_mw->dpr[i] = mw_condition[i];
-                }
-                sprintf(namebuf, "w");
-                vari* loc_w = createvar(namebuf,STREGULAR,w_condition.size(),VDOUBLE);
-                for (size_t i = 0; i < w_condition.size(); ++i) {
-                    loc_w->dpr[i] = w_condition[i];
-                }
-                char locfit_cmd[2048];
-                sprintf(locfit_cmd, "locfit w~mw");
-
-                locfit_dispatch(locfit_cmd);
-
-                sprintf(namebuf, "m");
-                vari* m_domain = createvar(namebuf,STREGULAR,mw_condition.size(),VDOUBLE);
-                for (size_t i = 0; i < mw_condition.size(); ++i) {
-                    m_domain->dpr[i] = mw_condition[i];
-                }
-
-                sprintf(locfit_cmd, "w_variance=predict m");
-                locfit_dispatch(locfit_cmd);
-
-                int n = 0;
-                sprintf(namebuf, "w_variance");
-                vari* w = findvar(namebuf, 1, &n);
-                assert(w != NULL);
-
-                for (size_t i = 0; i < w->n; ++i) {
-                    m_var[mw_condition[i]] = w->dpr[i];
-                }*/
-
             }
         }
 
@@ -713,36 +696,19 @@ namespace rs {
             }
         }
 
-        // returns Pr(theta | m)
-        double negBinomialDist(int theta, double m, double v, int sz) {
-            double p, q, s = (double) sz;
-            if (s * v - m == 0) {
-                printf("WARNING: SrScv - m = 0\n");
-                return 0;
-            }
-
-            p = 1 - m / (s * v);
-            q = (s * m * m) / (s * v - m);
-            if (round(q) <= 0) {
-                q = std::max(round(q), 1.);
-            }
-
-            size_t a = theta + round(q) - 1;
+        // returns ln (Pr(theta | m))
+        double negBinomialDist(int theta, double p, double q) {
+            errno = 0;
+            size_t a = theta + std::max(round(q), 1.) - 1;
             double r = lnFactorial(a) - lnFactorial((size_t)theta) - lnFactorial(a - theta);
-            r += q * log(1 - p) + (double)theta * log(p);
+            double l = r + q * log(1. - p) + (double)theta * log(p);
 
             if (errno != 0) {
-                printf("ERROR: error occurred in negBinomialDist: %s\n", strerror(errno));
-                assert(false);
-            }
-            errno = 0;
-            double e = exp(r);
-            if (errno == ERANGE) {
-                printf("ERROR: exp(%e) = %e overflows\n", r, e);
+                printf("ERROR: error occurred in negBinomialDist: %s (return value: ln C(a, th) + q ln(1-p) + th ln(p) = ln C(%zu, %i) + %e ln(1-%e) + %i ln(%e) = %e)\n", strerror(errno), a, theta, q, p, theta, p, l);
                 assert(false);
             }
 
-            return e;
+            return l;
         }
 
         void gibbsG(int cond_idx, int r, int cl_idx) {
@@ -773,7 +739,6 @@ namespace rs {
         }
 
         void gibbsTheta(int cond_idx, int r, int cl_idx) {
-            printf("\t\t\t\tgibbsTheta: cond[%i], r[%i], cluster[%i]\n", cond_idx, r, cl_idx);
             // For each replicate cluster c, for each replicate r:
             //      P(theta_rt | ...) = P(theta_r,t | m_t) * (theta_r,t / (sum_(i != t) theta_r,i + theta_r,t))^(#G == t)
 
@@ -788,6 +753,8 @@ namespace rs {
                 th_sum += theta[t];
             }
 
+            printf("\t\t\t\tgibbsTheta: cond[%i], r[%i], cluster[%i] with %i transcripts\n", cond_idx, r, cl_idx, num_transcripts);
+
             for (int t = 0; t < num_transcripts; t++) {
                 vector<double> theta_probs(sz, 0);
                 int g_transcript = 0; // #sigmers that match t
@@ -800,11 +767,18 @@ namespace rs {
                 double v = v_data[cond_idx][cl_idx][t];
 
                 double denom, factor, prob_theta;
-
+                int erange_errors = 0, total_probs = 0;
                 if (v != 0 && m != 0) {
+                    double p = 1. - m / ((double)sz * v);
+                    double q = ((double)sz * m * m) / ((double)sz * v - m);
+
+                    if (p <= 0 || p >= 1) printf("ERROR: p = %.20e, q = %.20e\n", p, q);
+
+                    auto begin = std::chrono::high_resolution_clock::now();
+
                     for (int i = 0; i < sz; i++) {
                         int th = i + 1;
-                        prob_theta = negBinomialDist(th, m, v, sz);
+                        prob_theta = negBinomialDist(th, p, q); // ln()
                         denom = th_sum - (double)theta[t] + (double)th;
                         if (denom == 0) {
                             printf("WARNING: sum(theta) = 0 for cond[%i], cluster[%i], tr[%i], theta[%i]\n", cond_idx, cl_idx, t, theta[t]);
@@ -815,22 +789,42 @@ namespace rs {
                                 assert(false);
                             }
                             errno = 0;
-                            factor = pow(frac, g_transcript); // TODO: ln this
+                            factor = g_transcript * log(frac);
                             if (errno == ERANGE) {
-                                printf("ERROR: pow overflowed: pow(factor, g_transcript) = %e^%i = %e\n", frac, g_transcript, factor);
+                                printf("ERROR: operation overflowed: g_transcript * log(factor) = %i * log(%e) = %e\n", g_transcript, frac, factor);
                                 assert(false);
                             }
-                            theta_probs[i] = (prob_theta * factor);
+
+                            theta_probs[i] = exp(prob_theta + factor);
+                            if (errno == ERANGE) {
+                                //printf("ERROR: exp overflowed: exp(P + f) = exp(%e + %e) = %e for theta = %i/%i\n", prob_theta, factor, theta_probs[i], th, sz + 1);
+                                erange_errors++;
+                                errno = 0;
+                            }
+                            if (theta_probs[i] != 0) total_probs++;
                         }
                     }
+
+                    auto end = std::chrono::high_resolution_clock::now();
+                    auto dur = end - begin;
+                    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+                    cout << "Build prob distribution: " << ms << "ms" << endl;
+                    begin = std::chrono::high_resolution_clock::now();
+
                     boost::random::discrete_distribution<> distribution(theta_probs.begin(), theta_probs.end());
                     theta[t] = distribution(generator) + 1; // result in {1, ..., sz}
+
+                    end = std::chrono::high_resolution_clock::now();
+                    dur = end - begin;
+                    ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+                    cout << "Sampled from distribution: " << ms << "ms" << endl;
+
+                    printf("%s\t%i erange errors : %i nonzero sampling P(theta|...) for transcript %i/%i (v = %e, m = %e) (sz = %i)\n", currentDateTime().c_str(), erange_errors, total_probs, t, num_transcripts, v, m, sz);
                 } else {
                     //printf("WARNING: v[%e], m[%e] for cond[%i], cluster[%i], tr[%i], theta[%i]\n", v, m, cond_idx, cl_idx, t, theta[t]);
                 }
 
             }
-
             theta_data[cond_idx][cl_idx][r] = theta;
         }
 
@@ -846,10 +840,24 @@ namespace rs {
                     double v = v_data[cond_idx][cl_idx][t];
 
                     for (int r = 0; r < replicates[cond_idx]; r++) {
+                        double s = round(size_conditions[cond_idx] * size_replicates[cond_idx][r]);
+                        double p = 1. - m_candidate / (s * v);
+                        double q = ((double)sz * m_candidate * m_candidate) / (s * v - m_candidate);
+
                         int theta = theta_data[cond_idx][cl_idx][r][t];
-                        product *= negBinomialDist(theta, m_candidate, v, round(size_conditions[cond_idx] * size_replicates[cond_idx][r]));
+                        product += negBinomialDist(theta, p, q);
                     }
-                    m_probs[sz - 1] = product;
+
+                    errno = 0;
+                    if (errno != 0) {
+                        printf("ERROR: error occurred in gibbsM: %s\n", strerror(errno));
+                        assert(false);
+                    }
+                    m_probs[sz - 1] = exp(product);
+                    if (errno == ERANGE) {
+                        printf("ERROR: ERANGE error on exp(%e) = %e\n", product, m_probs[sz - 1]);
+                        assert(false);
+                    }
                 }
                 boost::random::discrete_distribution<> distribution(m_probs.begin(), m_probs.end());
                 m[t] = (distribution(generator) + 1) / Sc;
@@ -927,6 +935,18 @@ namespace rs {
             return ln_factorials[n];
         }
 
+        const string currentDateTime() {
+            time_t     now = time(0);
+            struct tm  tstruct;
+            char       buf[80];
+            tstruct = *localtime(&now);
+            // Visit http://en.cppreference.com/w/cpp/chrono/c/strftime
+            // for more information about date/time format
+            strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
+            
+            return buf;
+        }
+
         void run() {
             cout << "done" << endl;
         }
@@ -960,6 +980,7 @@ namespace rs {
 
         std::default_random_engine generator;
         string R_file = "rsgibbs_locfit.dat"; // Note: if this value is edited, ensure that gibbs.R is also adjusted accordingly
+        string Rlocfit_file = "rsgibbs_locfitted.dat";
     };
 }
 
