@@ -179,6 +179,11 @@ namespace rs {
              */
 
             if (DEBUG) printf("Gibbs sampling:\n");
+            auto begin = std::chrono::high_resolution_clock::now();
+            auto end = std::chrono::high_resolution_clock::now();
+            auto dur = end - begin;
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+
             for (auto cond_it : conditions) {
                 int cond_idx = cond_it.second;
                 string condition = cond_it.first;
@@ -197,8 +202,20 @@ namespace rs {
                         }
 
                         for (int r = 0; r < replicates[cond_idx]; r++) {
+                            printf("\t\t\t\t\tReplicate %i/%i...\n", r + 1, replicates[cond_idx]);
+                            begin = std::chrono::high_resolution_clock::now();
                             gibbsG(cond_idx, r, cl_idx);
+                            end = std::chrono::high_resolution_clock::now();
+                            dur = end - begin;
+                            ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+                            printf("\t\t\t\t\t\tGibbs G complete [%ld ms]\n", ms);
+
+                            begin = std::chrono::high_resolution_clock::now();
                             gibbsTheta(cond_idx, r, cl_idx);
+                            end = std::chrono::high_resolution_clock::now();
+                            dur = end - begin;
+                            ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
+                            printf("\t\t\t\t\t\tGibbsTheta complete [%ld ms]\n", ms);
                         }
                         if (DEBUG) printf("\t\t\t\tCluster %i: %s sampling m\n", cl_idx, cl_it.first.c_str());
                         gibbsM(cond_idx, cl_idx, i);
@@ -507,6 +524,7 @@ namespace rs {
             vector<vector<vector<double>>> z(conditions.size()); // #conditions x #clusters x #transcripts: z bias correction term
 
             v_data.resize(conditions.size()); // #conditions x #clusters x #transcripts
+            v_sampling_data.resize(conditions.size()); // #conditions x Sc
 
             for (auto cond_it : conditions) {
                 map<double, double> m_var; // LOCFIT m -> w
@@ -516,6 +534,7 @@ namespace rs {
                 vector<double> mw_condition;
                 vector<vector<double>> z_condition(clusters.size());
                 vector<vector<double>> v_condition(clusters.size());
+                vector<double> v_sampling_condition(round(size_conditions[cond_idx]) + 1);
 
                 for (auto cl_it : cluster_transcripts_map) {
                     size_t num_transcripts = cl_it.second.size();
@@ -564,6 +583,8 @@ namespace rs {
                 z[cond_idx] = z_condition;
 
                 // create files for R consumption
+
+                // write file for locfitting
                 ofstream ofile;
                 ofile.open (R_file, ios::out | ios::trunc);
                 ofile << "m\tw" << endl;
@@ -575,11 +596,22 @@ namespace rs {
 
                 ofile.close();
 
+                // write file for prediction only (used in sampling m)
+                ofile.open(R_predict_file, ios::out | ios::trunc);
+                ofile << "m" << endl;
+
+                for (size_t i = 0; i < v_sampling_condition.size(); i++) {
+                    double m_candidate = (double) i / size_conditions[cond_idx];
+                    ofile << m_candidate << endl;
+                }
+
+                ofile.close();
+
                 system("Rscript gibbs.R");
 
                 string line;
                 ifstream ifile;
-                ifile.open(Rlocfit_file, ios::in);
+                ifile.open(R_file, ios::in);
                 if (ifile.is_open()) {
                     size_t l = 0;
                     while (getline(ifile, line)) {
@@ -602,8 +634,33 @@ namespace rs {
                 }
 
                 if (DEBUG) { // keep copies of the locfit output files
-                    ifstream src(Rlocfit_file);
+                    ifstream src(R_file);
                     ofstream dst("rsgibbs_" + condition + ".dat", ios::trunc);
+
+                    dst << src.rdbuf();
+                }
+
+                ifile.open(R_predict_file, ios::in);
+                if (ifile.is_open()) {
+                    size_t l = 0;
+                    while (getline(ifile, line)) {
+                        vector<string> tokens = split(line, '\t');
+                        // m, fitted
+                        double w = boost::lexical_cast<double>(tokens[1].c_str());
+                        if (l > 0)
+                            assert(w > 0);
+                        v_sampling_condition[l] = w;
+                        l++;
+                    }
+                    assert(l == v_sampling_condition.size());
+                    ifile.close();
+                } else {
+                    printf("Failed to open %s\n", R_predict_file.c_str());
+                }
+
+                if (DEBUG) { // keep copies of the locfit output files
+                    ifstream src(R_predict_file);
+                    ofstream dst("rsgibbs_predict_" + condition + ".dat", ios::trunc);
 
                     dst << src.rdbuf();
                 }
@@ -627,6 +684,7 @@ namespace rs {
                 }
 
                 v_data[cond_idx] = v_condition;
+                v_sampling_data[cond_idx] = v_sampling_condition;
             }
         }
 
@@ -756,7 +814,7 @@ namespace rs {
             printf("\t\t\t\tgibbsTheta: cond[%i], r[%i], cluster[%i] with %i transcripts\n", cond_idx, r, cl_idx, num_transcripts);
 
             for (int t = 0; t < num_transcripts; t++) {
-                vector<double> theta_probs(sz, 0);
+                vector<double> theta_probs;
                 int g_transcript = 0; // #sigmers that match t
                 for (int g_idx : G) {
                     if (g_idx == t)
@@ -774,16 +832,19 @@ namespace rs {
 
                     if (p <= 0 || p >= 1) printf("ERROR: p = %.20e, q = %.20e\n", p, q);
 
-                    auto begin = std::chrono::high_resolution_clock::now();
+                    int min_theta = floor(std::max(0., m - 3*pow(v, 0.5)) * size_conditions[cond_idx]) + 1;
+                    int max_theta = ceil(std::min(1., m + 3*pow(v, 0.5)) * size_conditions[cond_idx]);
 
-                    for (int i = 0; i < sz; i++) {
-                        int th = i + 1;
-                        prob_theta = negBinomialDist(th, p, q); // ln()
-                        denom = th_sum - (double)theta[t] + (double)th;
+                    theta_probs.resize(max_theta + 1, 0);
+
+                    for (int th = min_theta; th <= max_theta; th++) {
+                        int theta_candidate = th * size_replicates[cond_idx][r];
+                        prob_theta = negBinomialDist(theta_candidate, p, q); // ln()
+                        denom = th_sum - (double)theta[t] + (double)theta_candidate;
                         if (denom == 0) {
-                            printf("WARNING: sum(theta) = 0 for cond[%i], cluster[%i], tr[%i], theta[%i]\n", cond_idx, cl_idx, t, theta[t]);
+                            printf("ERROR: sum(theta) = 0 for cond[%i], cluster[%i], tr[%i], theta[%i]\n", cond_idx, cl_idx, t, theta[t]);
                         } else {
-                            double frac = (double)th / denom;
+                            double frac = (double)theta_candidate / denom;
                             if (errno != 0) {
                                 printf("ERROR: error occurred in gibbsTheta: %s\n", strerror(errno));
                                 assert(false);
@@ -795,31 +856,20 @@ namespace rs {
                                 assert(false);
                             }
 
-                            theta_probs[i] = exp(prob_theta + factor);
+                            theta_probs[th] = exp(prob_theta + factor);
                             if (errno == ERANGE) {
-                                //printf("ERROR: exp overflowed: exp(P + f) = exp(%e + %e) = %e for theta = %i/%i\n", prob_theta, factor, theta_probs[i], th, sz + 1);
                                 erange_errors++;
                                 errno = 0;
                             }
-                            if (theta_probs[i] != 0) total_probs++;
+                            if (theta_probs[th] != 0) total_probs++;
                         }
                     }
 
-                    auto end = std::chrono::high_resolution_clock::now();
-                    auto dur = end - begin;
-                    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-                    cout << "Build prob distribution: " << ms << "ms" << endl;
-                    begin = std::chrono::high_resolution_clock::now();
-
                     boost::random::discrete_distribution<> distribution(theta_probs.begin(), theta_probs.end());
-                    theta[t] = distribution(generator) + 1; // result in {1, ..., sz}
+                    theta[t] = distribution(generator) * size_replicates[cond_idx][r]; // result in {1, ..., sz}
 
-                    end = std::chrono::high_resolution_clock::now();
-                    dur = end - begin;
-                    ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-                    cout << "Sampled from distribution: " << ms << "ms" << endl;
-
-                    printf("%s\t%i erange errors : %i nonzero sampling P(theta|...) for transcript %i/%i (v = %e, m = %e) (sz = %i)\n", currentDateTime().c_str(), erange_errors, total_probs, t, num_transcripts, v, m, sz);
+                    if (erange_errors > 0)
+                        printf("\t\t%s\t%i erange errors : %i nonzero sampling P(theta|...) for transcript %i/%i (v = %e, m = %e) (sz = %i)\n", currentDateTime().c_str(), erange_errors, total_probs, t, num_transcripts, v, m, sz);
                 } else {
                     //printf("WARNING: v[%e], m[%e] for cond[%i], cluster[%i], tr[%i], theta[%i]\n", v, m, cond_idx, cl_idx, t, theta[t]);
                 }
@@ -834,11 +884,14 @@ namespace rs {
 
             for (int t = 0; t < (int)m.size(); t++) {
                 vector<double> m_probs(Sc);
+                int erange_errors = 0, total_probs = 0;
                 for (int sz = 1; sz <= (int)m_probs.size(); sz++) {
                     double product = 1;
                     double m_candidate = (double)sz / Sc;
-                    double v = v_data[cond_idx][cl_idx][t];
-
+                    double v = v_sampling_data[cond_idx][sz];
+                    if (v <= 0)
+                        printf("ERROR: cond[%i], sz = %i, m = %e, v = %e\n", cond_idx, sz, m_candidate, v);
+                    assert(v > 0);
                     for (int r = 0; r < replicates[cond_idx]; r++) {
                         double s = round(size_conditions[cond_idx] * size_replicates[cond_idx][r]);
                         double p = 1. - m_candidate / (s * v);
@@ -855,10 +908,14 @@ namespace rs {
                     }
                     m_probs[sz - 1] = exp(product);
                     if (errno == ERANGE) {
-                        printf("ERROR: ERANGE error on exp(%e) = %e\n", product, m_probs[sz - 1]);
-                        assert(false);
+                        errno = 0;
+                        erange_errors++;
                     }
+                    if (m_probs[sz - 1] > 0) total_probs++;
                 }
+                if (erange_errors > 0)
+                    printf("\t\t%s\t%i erange errors : %i nonzero sampling P(m|...) for transcript %i/%zu\n", currentDateTime().c_str(), erange_errors, total_probs, t, m.size());
+
                 boost::random::discrete_distribution<> distribution(m_probs.begin(), m_probs.end());
                 m[t] = (distribution(generator) + 1) / Sc;
             }
@@ -968,6 +1025,7 @@ namespace rs {
         vector<vector<vector<vector<int>>>> G_data; // #conditions x #clusters x #replicates x #sigmers: transcript id (from transcripts)
         vector<vector<vector<double>>> m_data; // #conditions x #clusters x #transcripts: probability that general sigmer belongs to a transcript
         vector<vector<vector<double>>> v_data; // #conditions x #clusters x #transcripts: variance of m
+        vector<vector<double>> v_sampling_data; // #conditions x (#Sc + 1): variance of m = i/Sc
         vector<vector<vector<double>>> m_Gibbs; // 1000 x #conditions x #transcripts: m data over all 1000 iterations
         vector<vector<vector<vector<vector<double>>>>> theta_P_data; // P(theta | m) #conditions x #replicates x #clusters x #transcripts x #SrSc based on m_data
 
@@ -980,7 +1038,7 @@ namespace rs {
 
         std::default_random_engine generator;
         string R_file = "rsgibbs_locfit.dat"; // Note: if this value is edited, ensure that gibbs.R is also adjusted accordingly
-        string Rlocfit_file = "rsgibbs_locfitted.dat";
+        string R_predict_file = "rsgibbs_predict.dat";
     };
 }
 
