@@ -48,11 +48,12 @@ DEFINE_double(sampling_factor, 0, "(testing) Every nth sigmer to be included.");
 
 #define DEBUG 1
 #define NUM_THREADS 32
+#define THRESHOLD 200
 
 namespace rs {
     class GibbsSampler {
     public:
-        GibbsSampler(const string input_file, double sampling_factor) {
+        GibbsSampler(const string input_file, const double sampling_factor) {
             cout << "sampling factor: " << sampling_factor << endl;
             // conditions, replicates, cf_files, em_files
             parseInputFile(input_file);
@@ -148,9 +149,13 @@ namespace rs {
             // m_data: first divide the theta vector for each replicate by its size factor. Then take average of all the replicates for one condition. Finally normalize it.
             initMData();
             filterClusters();
+
             cout << currentDateTime() << "\tClusters to be processed: " << unprocessed_clusters.size() << endl;
 
-            output(ios::out | ios::trunc, 0);
+            for (auto cond_it : conditions) {
+                output(ios::out | ios::trunc, 0, cond_it.first);
+            }
+
             if (DEBUG) printf("initMData: complete\n");
 
             calcMVariance();
@@ -199,7 +204,7 @@ namespace rs {
                         threads.at(thr).join();
                     }
 
-                    output(ios::out | ios::app, i);
+                    output(ios::out | ios::app, i, condition);
 
                     for (int cl_idx = 0; cl_idx < (int)cluster_performance.size(); cl_idx++) {
                         if (cluster_performance[cl_idx] > 0) {
@@ -250,7 +255,8 @@ namespace rs {
                 }
             }
 
-            std::sort(unprocessed_clusters.begin(), unprocessed_clusters.end(), &GibbsSampler::clusterComparison);
+            sortstruct s(this);
+            std::sort(unprocessed_clusters.begin(), unprocessed_clusters.end(),  s);
         }
 
         bool clusterComparison(int cl1, int cl2) {
@@ -263,7 +269,6 @@ namespace rs {
         }
 
         void finalOutput() {
-
             double m_mean, m_5 = 0, m_95 = 0, m_var = 0;
 
             for (auto cond_it : conditions) {
@@ -276,6 +281,7 @@ namespace rs {
                 mfile.open ("rsgibbs_" + condition + ".dat", ios::out | ios::trunc);
                 mfile << "Transcript" << "\t" << "Mean x Sc" << "\t" << "Variance x Sc^2" << "\t" << "5%ile" << "\t" << "95%ile" << endl;
 
+                printf("%zu iterations in m_Gibbs\n", m_Gibbs.size());
                 double Sc = size_conditions[cond_idx];
                 for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
                     string cluster = cluster_vector[cl_idx];
@@ -286,7 +292,6 @@ namespace rs {
                         for (int i = 0; i < (int)m_Gibbs.size(); i++) {
                             m.push_back(m_Gibbs[i][cond_idx][cl_idx][t_idx]);
                         }
-                        printf("%zu iterations in m_Gibbs\n", m_Gibbs.size());
 
                         m_mean = std::accumulate(m.begin(), m.end(), 0.0) / (double) m.size();
                         vector<double> diff(m.size());
@@ -327,36 +332,31 @@ namespace rs {
                 auto begin = std::chrono::high_resolution_clock::now();
                 auto end = std::chrono::high_resolution_clock::now();
                 auto dur = end - begin;
-                auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
 
-                for (int r = 0; r < replicates[cond_idx]; r++) {
-                    begin = std::chrono::high_resolution_clock::now();
-                    gibbsG(cond_idx, r, cl_idx);
-                    end = std::chrono::high_resolution_clock::now();
-                    dur = end - begin;
-                    ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-                    //printf("[%i]\t\t\t\t\t\tGibbs G complete [%ld ms / %zu sigmers] \n", thread_idx, ms,  G_data[cond_idx][cl_idx][r].size());
-
-                    begin = std::chrono::high_resolution_clock::now();
-                    gibbsTheta(cond_idx, r, cl_idx);
-                    end = std::chrono::high_resolution_clock::now();
-                    dur = end - begin;
-                    ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-                    //printf("[%i]\t\t\t\t\t\tGibbsTheta complete [%ld ms / %zu transcripts]\n", thread_idx, ms, theta_data[cond_idx][cl_idx][r].size());
+                // replicate threading
+                vector<thread> threads(replicates[cond_idx] - 1);
+                for (int r = 1; r < replicates[cond_idx]; r++) {
+                    threads.at(r) = thread(&GibbsSampler::processGandTheta, this, cond_idx, cl_idx, r);
                 }
-                begin = std::chrono::high_resolution_clock::now();
+                processGandTheta(cond_idx, cl_idx, 0);
+                for (int thr = 0; thr < (int)threads.size(); thr++) {
+                    threads.at(thr).join();
+                }
+
                 gibbsM(cond_idx, cl_idx);
+
                 end = std::chrono::high_resolution_clock::now();
-                dur = end - begin;
-                ms = std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
-                //printf("[%i]\t\t\t\t\tGibbsM complete [%ld ms / %zu transcripts]\n", thread_idx, ms, m_data[cond_idx][cl_idx].size());
-                
                 dur = end - cluster_begin;
 
                 perf_mutex.lock();
                 cluster_performance[cl_idx] = (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
                 perf_mutex.unlock();
             }
+        }
+
+        void processGandTheta(int cond_idx, int cl_idx, int r) {
+            gibbsG(cond_idx, r, cl_idx);
+            gibbsTheta(cond_idx, r, cl_idx);
         }
 
         // Initializes: conditions (map), replicates, cf_files, em_files
@@ -482,7 +482,7 @@ namespace rs {
             }
         }
 
-        void parseCFData(const string cf, double sampling_factor_) {
+        void parseCFData(const string cf, const double sampling_factor_) {
             /* F_data; #clusters x #sigmers x #transcripts: num (specific) sigmer per transcript
              * L_data; #clusters x #transcripts: num (general) sigmers per transcript
              * G_data; #conditions x #clusters x #replicates x #sigmers: transcript id (from transcripts) */
@@ -530,14 +530,15 @@ namespace rs {
                 vector<vector<int>> F_cluster_data;
                 vector<int> L_cluster_data(num_transcripts, 0);
 
-                double sampling_factor = sampling_factor_;
-                if (sampling_factor != 0) {
-                    sampling_factor = sampling_factor * (double)num_transcripts / (double)sk.keys_size();
+                double sampling_factor = 0;
+                if (sampling_factor_ != 0 && sk.keys_size() >= THRESHOLD) {
+                    sampling_factor = sampling_factor_ * (double)num_transcripts / (double)sk.keys_size();
                     if (sampling_factor >= 1)
                         sampling_factor = 0;
                 }
 
                 // iterate over sigmers
+                sigmers:
                 for (int s = 0; s < sk.keys_size(); s++) {
                     // create vector -- size = num_transcripts per cluster, each entry is number of times a sigmer appears in the transcript
                     vector<int> F_sigmer_data(num_transcripts, 0);
@@ -564,6 +565,11 @@ namespace rs {
 
                 if (sampling_factor != 0.) {
                     printf("Sampled %zu/%i sigmers for cluster %s with %zu transcripts [factor = %e]\n", F_cluster_data.size(), sk.keys_size(), cluster.c_str(), num_transcripts, sampling_factor);
+                    if (F_cluster_data.size() == 0) {
+                        sampling_factor *= 1.1;
+                        printf("Re-sampling with sampling factor = %f\n", sampling_factor);
+                        goto sigmers;
+                    }
                 }
 
                 F_data[cl_idx] = F_cluster_data;
@@ -1033,6 +1039,10 @@ namespace rs {
                     boost::random::discrete_distribution<> distribution(theta_probs.begin(), theta_probs.end());
                     theta[t] = distribution(generator) * size_replicates[cond_idx][r]; // result in {1, ..., sz}
 
+                    if (m > 0.5) {
+                        cout << "sampled theta: " << theta[t] << ", Sr = " << size_replicates[cond_idx][r] << " from m = " << m << ", old theta = " << theta_data[cond_idx][cl_idx][r][t] << ", max theta = " << max_theta << endl;
+                    }
+
                     /*if (erange_errors > 0)
                         printf("\t\t%s\t%i erange errors : %i nonzero sampling P(theta|...) for transcript %i/%i (v = %e, m = %e) (sz = %i)\n", currentDateTime().c_str(), erange_errors, total_probs, t, num_transcripts, v, m, sz);*/
                 } else {
@@ -1134,40 +1144,35 @@ namespace rs {
             }
         }
 
-        void output(std::ios_base::openmode mode, int i) {
-            for (auto cond_it : conditions) {
-                int cond_idx = cond_it.second;
-                string condition = cond_it.first;
+        // for debugging: prints m vector after every iteration in out/cluster.dat files
+        void output(std::ios_base::openmode mode, int i, string condition) {
+            int cond_idx = conditions[condition];
+            for (int cl = 0; cl < (int)unprocessed_clusters.size(); cl++) {
+                int cl_idx = unprocessed_clusters[cl];
+                string cluster = cluster_vector[cl_idx];
 
-                //for (int cl_idx = 0; cl_idx < (int)m_data[cond_idx].size(); cl_idx++) {
-                // DEBUG MODE
+                ofstream m_file;
+                string file_name = "out/m_" + condition + "." + cluster + ".dat";
+                m_file.open (file_name.c_str(), mode);
+                printf("[%i] Printing m to %s\n", i, file_name.c_str());
 
-                for (int cl = 0; cl < (int)unprocessed_clusters.size(); cl++) {
-                    int cl_idx = unprocessed_clusters[cl];
-                    string cluster = cluster_vector[cl_idx];
-
-                    ofstream m_file;
-                    string file_name = "out/m_" + condition + "." + cluster + ".dat";
-                    m_file.open (file_name.c_str(), mode);
-                    printf("[%i] Printing m to %s\n", i, file_name.c_str());
-
-                    if (i == 0) {
-                        for (int t_idx = 0; t_idx < (int)m_data[cond_idx][cl_idx].size(); t_idx++) {
-                            string transcript = cluster_transcripts_map[cluster][t_idx];
-                            m_file << transcript << "\t";
-                        }
-                        m_file << endl;
-                    }
-                    
+                // print header line
+                if (i == 0) {
                     for (int t_idx = 0; t_idx < (int)m_data[cond_idx][cl_idx].size(); t_idx++) {
-                        m_file << m_data[cond_idx][cl_idx][t_idx] << "\t";
+                        string transcript = cluster_transcripts_map[cluster][t_idx];
+                        m_file << transcript << "\t";
                     }
-
                     m_file << endl;
-                    m_file.close();
                 }
+
+                for (int t_idx = 0; t_idx < (int)m_data[cond_idx][cl_idx].size(); t_idx++) {
+                    m_file << m_data[cond_idx][cl_idx][t_idx] << "\t";
+                }
+
+                m_file << endl;
+                m_file.close();
             }
-            m_Gibbs[i] = m_data;
+            m_Gibbs[i][cond_idx] = m_data[cond_idx];
         }
 
         vector<string> split(const string &s, char delim) {
@@ -1271,6 +1276,24 @@ namespace rs {
         string R_predict_file = "rsgibbs_predict.dat";
 
         vector<double> cluster_performance;
+
+        struct sortstruct
+        {
+            // sortstruct needs to know its containing object
+            rs::GibbsSampler* m;
+            sortstruct(rs::GibbsSampler* p) : m(p) {};
+
+            // this is our sort function, which makes use
+            // of some non-static data (sortascending)
+            bool operator() (int cl1, int cl2) {
+                string cluster1 = m->cluster_vector[cl1];
+                string cluster2 = m->cluster_vector[cl2];
+                size_t tr1 = m->cluster_transcripts_map[cluster1].size();
+                size_t tr2 = m->cluster_transcripts_map[cluster2].size();
+
+                return (tr1 <= tr2);
+            }
+        };
     };
 }
 
