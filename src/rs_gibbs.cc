@@ -195,7 +195,7 @@ namespace rs {
                     cluster_performance.resize(clusters.size(), 0);
 
                     thread_unprocessed_clusters = unprocessed_clusters;
-                    vector<thread> threads(NUM_THREADS);
+                    threads.resize(NUM_THREADS);
                     for (int thr = 0; thr < NUM_THREADS; thr++) {
                         threads.at(thr) = thread(&GibbsSampler::processCluster, this, cond_idx, thr);
                     }
@@ -327,26 +327,24 @@ namespace rs {
                 thread_unprocessed_clusters.pop_back();
                 cluster_mutex.unlock();
 
-                printf("[%i]\t\t\t\tProcessing cluster [%i: %s]...\n", thread_idx, cl_idx, cluster.c_str());
-                auto cluster_begin = std::chrono::high_resolution_clock::now();
+                printf("[%i]\tProcessing cluster [%i: %s]...\n", thread_idx, cl_idx, cluster.c_str());
                 auto begin = std::chrono::high_resolution_clock::now();
                 auto end = std::chrono::high_resolution_clock::now();
                 auto dur = end - begin;
 
                 // replicate threading
-                vector<thread> threads(replicates[cond_idx] - 1);
-                for (int r = 1; r < replicates[cond_idx]; r++) {
-                    threads.at(r) = thread(&GibbsSampler::processGandTheta, this, cond_idx, cl_idx, r);
+                vector<thread> rep_threads(replicates[cond_idx]);
+                for (int r = 0; r < replicates[cond_idx]; r++) {
+                    rep_threads.at(r) = thread(&GibbsSampler::processGandTheta, this, cond_idx, cl_idx, r, thread_idx);
                 }
-                processGandTheta(cond_idx, cl_idx, 0);
-                for (int thr = 0; thr < (int)threads.size(); thr++) {
-                    threads.at(thr).join();
+                for (int thr = 0; thr < (int)rep_threads.size(); thr++) {
+                    rep_threads.at(thr).join();
                 }
 
                 gibbsM(cond_idx, cl_idx);
 
                 end = std::chrono::high_resolution_clock::now();
-                dur = end - cluster_begin;
+                dur = end - begin;
 
                 perf_mutex.lock();
                 cluster_performance[cl_idx] = (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count();
@@ -354,9 +352,19 @@ namespace rs {
             }
         }
 
-        void processGandTheta(int cond_idx, int cl_idx, int r) {
+        void processGandTheta(int cond_idx, int cl_idx, int r, int thread_idx) {
+            printf("\t[%i:%i]\tProcessGandTheta...\n", thread_idx, r);
+            auto begin = std::chrono::high_resolution_clock::now();
+            auto end = std::chrono::high_resolution_clock::now();
+
+            auto dur = end - begin;
             gibbsG(cond_idx, r, cl_idx);
             gibbsTheta(cond_idx, r, cl_idx);
+
+            end = std::chrono::high_resolution_clock::now();
+            dur = end - begin;
+            printf("\t[%i:%i]\tCompleted processGandTheta [%f ms]\n", thread_idx, r, (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+            return;
         }
 
         // Initializes: conditions (map), replicates, cf_files, em_files
@@ -607,13 +615,11 @@ namespace rs {
                     // #clusters: #sigmers that occur per cluster in this replicate
                     vector<int> sigmer_replicate(clusters.size());
 
-                    int zeros = 0;
                     for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
                         vector<int> sigmer_cluster = theta_data[cond_idx][cl_idx][r];
                         sigmer_replicate[cl_idx] = std::accumulate(sigmer_cluster.begin(), sigmer_cluster.end(), 0);
                         num_sigmers += sigmer_replicate[cl_idx];
                         if (sigmer_replicate[cl_idx] == 0) {
-                            zeros++;
                             zero_data[cl_idx]++;
                         }
                     }
@@ -1276,6 +1282,7 @@ namespace rs {
         string R_predict_file = "rsgibbs_predict.dat";
 
         vector<double> cluster_performance;
+        vector<thread> threads;
 
         struct sortstruct
         {
