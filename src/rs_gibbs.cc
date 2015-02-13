@@ -327,7 +327,7 @@ namespace rs {
                 thread_unprocessed_clusters.pop_back();
                 cluster_mutex.unlock();
 
-                printf("[%i]\tProcessing cluster [%i: %s]...\n", thread_idx, cl_idx, cluster.c_str());
+                if (DEBUG) printf("[%i]\tProcessing cluster [%i: %s]...\n", thread_idx, cl_idx, cluster.c_str());
                 auto begin = std::chrono::high_resolution_clock::now();
                 auto end = std::chrono::high_resolution_clock::now();
                 auto dur = end - begin;
@@ -353,7 +353,7 @@ namespace rs {
         }
 
         void processGandTheta(int cond_idx, int cl_idx, int r, int thread_idx) {
-            printf("\t[%i:%i]\tProcessGandTheta...\n", thread_idx, r);
+            if (DEBUG) printf("\t[%i:%i]\tProcessGandTheta...\n", thread_idx, r);
             auto begin = std::chrono::high_resolution_clock::now();
             auto end = std::chrono::high_resolution_clock::now();
 
@@ -363,7 +363,7 @@ namespace rs {
 
             end = std::chrono::high_resolution_clock::now();
             dur = end - begin;
-            printf("\t[%i:%i]\tCompleted processGandTheta [%f ms]\n", thread_idx, r, (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+            if (DEBUG) printf("\t[%i:%i]\tCompleted processGandTheta [%f ms]\n", thread_idx, r, (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
             return;
         }
 
@@ -599,14 +599,12 @@ namespace rs {
         void calcSizeFactors() {
             if (DEBUG) printf("Calculating size factors...\n");
             int num_replicates = std::accumulate(replicates.begin(), replicates.end(), 0);
-            int num_sigmers = 0;
-            // size_replicate: median (over C clusters) for (#sigmers in cluster c for replicate r / sum #sigmers across all replicates in cluster c ^ 1/#replicates
+            // size_replicate: median (over C clusters) for (#sigmers in cluster c for replicate r / product #sigmers across all replicates in cluster c ^ 1/#replicates
 
             // calculate #sigmers per cluster per replicate
             vector<vector<vector<int>>> sigmer_data(conditions.size()); // #conditions x #replicates x #clusters: #sigmers (from theta_data)
-
-            // #cluster ID : #0s
-            vector<int> zero_data(clusters.size(), 0);
+            vector<double> denom_data(clusters.size(), 0); // #clusters: (product_(all replicates) #sigmers) ^ 1/#replicates
+            vector<int> zero_data(clusters.size(), 0); // #cluster ID : #0s
 
             for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
                 vector<vector<int>> sigmer_condition(replicates[cond_idx]);
@@ -618,9 +616,10 @@ namespace rs {
                     for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
                         vector<int> sigmer_cluster = theta_data[cond_idx][cl_idx][r];
                         sigmer_replicate[cl_idx] = std::accumulate(sigmer_cluster.begin(), sigmer_cluster.end(), 0);
-                        num_sigmers += sigmer_replicate[cl_idx];
                         if (sigmer_replicate[cl_idx] == 0) {
                             zero_data[cl_idx]++;
+                        } else {
+                            denom_data[cl_idx] += log(sigmer_replicate[cl_idx]);
                         }
                     }
                     sigmer_condition[r] = sigmer_replicate;
@@ -628,20 +627,29 @@ namespace rs {
                 sigmer_data[cond_idx] = sigmer_condition;
             }
 
-            // populate zero_cluster_map
+            // populate zero_cluster_map and denominator data
             for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
                 if (zero_data[cl_idx] == num_replicates)
                     zero_cluster_map[cl_idx] = 1;
 
                 if (zero_data[cl_idx] != num_replicates)
                     unprocessed_clusters.push_back(cl_idx);
+
+                errno = 0;
+                if (zero_data[cl_idx] == 0)
+                    denom_data[cl_idx] = exp(denom_data[cl_idx]/(double)num_replicates);
+                else
+                    denom_data[cl_idx] = 0;
+
+                if (errno == ERANGE) {
+                    printf("ERROR: operation overflowed: exp(%f / %i)\n", denom_data[cl_idx], num_replicates);
+                    assert(false);
+                }
             }
             if (DEBUG) printf("%zu/%zu clusters to be processed\n", unprocessed_clusters.size(), clusters.size());
 
             // calculate size factors per replicate
             size_replicates.resize(conditions.size());
-            double denom = pow(num_sigmers, 1 / (double)num_replicates);
-            if (DEBUG) printf("\t#sigmers: %i\n\t#replicates = %i\n\t#s^(1/#r) = %f\n", num_sigmers, num_replicates, denom);
 
             for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
                 vector<double> size_replicates_cond(replicates[cond_idx]);
@@ -650,19 +658,20 @@ namespace rs {
                     int zeros = 0;
                     vector<double> rep_temp;
                     for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
+                        if (DEBUG && cl_idx == clusters["ENSMUSG00000074519"])
+                            cout << sigmer_data[cond_idx][r][cl_idx] << "\t" << denom_data[cl_idx] << endl;
+
                         if (zero_cluster_map.find(cl_idx) == zero_cluster_map.end()) {
-                            rep_temp.push_back((double)sigmer_data[cond_idx][r][cl_idx]);
-                            if (sigmer_data[cond_idx][r][cl_idx] == 0)
+                            if (denom_data[cl_idx] == 0 || sigmer_data[cond_idx][r][cl_idx] == 0) {
+                                rep_temp.push_back(0);
                                 zeros++;
+                            } else {
+                                rep_temp.push_back((double)sigmer_data[cond_idx][r][cl_idx] / denom_data[cl_idx]);
+                            }
                         }
                     }
 
                     if (DEBUG) printf("\tPostfilter: %i/%zu clusters with 0 sigmers from theta data [condition:%i, replicate:%i]\n", zeros, rep_temp.size(), cond_idx, r);
-
-                    // find median of sigmer_replicate (divide by cross condition data first)
-                    for (auto i = rep_temp.begin(); i != rep_temp.end(); ++i) {
-                        (*i) /= denom;
-                    }
 
                     double med = median(rep_temp);
                     size_replicates_cond[r] = med;
