@@ -47,7 +47,7 @@ DEFINE_string(input_file, "", "Text file containing all input files (tab-delimit
 DEFINE_double(sampling_factor, 0, "(testing) Every nth sigmer to be included.");
 
 #define DEBUG 1
-#define NUM_THREADS 20
+#define NUM_THREADS 32
 #define THRESHOLD 500
 
 namespace rs {
@@ -143,7 +143,7 @@ namespace rs {
             }
             if (DEBUG) printf("Maximum SrSc = %zu\n", max_size);
             ln_factorials.resize(1, 0); // initialize ln(0!)
-            calcLogFactorials(max_size + 5);
+            calcLogFactorials(max_size * 2);
             if (DEBUG) printf("Initialized ln(n!) up to ln(%zu!) = %f\n", ln_factorials.size() - 1, ln_factorials[ln_factorials.size() - 1]);
 
 
@@ -159,6 +159,7 @@ namespace rs {
                 output(ios::out | ios::trunc, 0, cond_it.first);
                 for (int cl_idx : unprocessed_clusters) {
                     outputTheta(ios::out | ios::trunc, 0, cond_it.first, cl_idx);
+                    outputG(ios::out | ios::trunc, 0, cond_it.first, cl_idx);
                 }
             }
 
@@ -184,16 +185,15 @@ namespace rs {
             printf("Gibbs sampling:\n");
             ofstream perf_file;
             perf_file.open ("rsgibbs_perf.dat", ios::out | ios::trunc);
-            perf_file << "cluster\tsigmers\ttranscripts\tms\titeration" << endl;
+            perf_file << "condition\tcluster\tsigmers\ttranscripts\tms\titeration" << endl;
 
+            for (int i = 1; i < num_iterations; i++) {
+                if (DEBUG) printf("\t\t%s iteration %i: \n", currentDateTime().c_str(), i);
 
-            for (auto cond_it : conditions) {
-                int cond_idx = cond_it.second;
-                string condition = cond_it.first;
-                if (DEBUG) printf("\tCondition [%i]: %s\n", cond_idx, condition.c_str());
-
-                for (int i = 1; i < num_iterations; i++) {
-                    if (DEBUG) printf("\t\t%s iteration %i: \n", currentDateTime().c_str(), i);
+                for (auto cond_it : conditions) {
+                    int cond_idx = cond_it.second;
+                    string condition = cond_it.first;
+                    if (DEBUG) printf("\tCondition [%i]: %s\n", cond_idx, condition.c_str());
 
                     cluster_performance.clear();
                     cluster_performance.resize(clusters.size(), 0);
@@ -213,11 +213,11 @@ namespace rs {
                     for (int cl_idx = 0; cl_idx < (int)cluster_performance.size(); cl_idx++) {
                         if (cluster_performance[cl_idx] > 0) {
                             string cluster = cluster_vector[cl_idx];
-                            perf_file << cluster << "\t" << F_data[cl_idx].size() << "\t" << cluster_transcripts_map[cluster].size() << "\t" << cluster_performance[cl_idx] << "\t" << i << endl;
+                            perf_file << condition << "\t" << cluster << "\t" << F_data[cl_idx].size() << "\t" << cluster_transcripts_map[cluster].size() << "\t" << cluster_performance[cl_idx] << "\t" << i << endl;
                         }
                     }
                 }
-
+                
                 if (DEBUG) printf("\tcomplete\n");
             }
             perf_file.close();
@@ -228,16 +228,6 @@ namespace rs {
         // order by #transcripts ascending to use threads efficiently
         // skip cluster processing with m[i] = {0,1}
         void filterClusters() {
-            /*unprocessed_clusters.clear();
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000000001"]); // 333618 sig, 8339 transcripts
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000074519"]); // 2134 sig, 121 transcripts
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000000182"]); // 3775	sig, 210 transcripts
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000030849"]);
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000020990"]);
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000051747"]);
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000028649"]);*/
-
-            /****** end debuggy stuff *****/
             printf("Unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
             size_t uncl_idx = 0;
             while (uncl_idx < unprocessed_clusters.size()) {
@@ -269,6 +259,12 @@ namespace rs {
             }
             std::sort(unprocessed_clusters.begin(), unprocessed_clusters.end(),  s);
             printf("Post sort: unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
+
+            // DEBUG
+            unprocessed_clusters.clear();
+            unprocessed_clusters.push_back(clusters["ENSMUSG00000009112"]);
+            assert(unprocessed_clusters.size() == 1);
+            printf("Post debug clear: unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
         }
 
         void finalOutput() {
@@ -335,15 +331,26 @@ namespace rs {
                 auto end = std::chrono::high_resolution_clock::now();
                 auto dur = end - begin;
 
-                // replicate threading
+                for (int r = 0; r < replicates[cond_idx]; r++) {
+                    processGandTheta(cond_idx, cl_idx, r, thread_idx);
+                }
+                /* replicate threading
                 vector<thread> rep_threads(replicates[cond_idx]);
                 for (int r = 0; r < replicates[cond_idx]; r++) {
                     rep_threads.at(r) = thread(&GibbsSampler::processGandTheta, this, cond_idx, cl_idx, r, thread_idx);
                 }
                 for (int thr = 0; thr < (int)rep_threads.size(); thr++) {
                     rep_threads.at(thr).join();
+                }*/
+                if (DEBUG) {
+                    string condition = "";
+                    for (auto cond_it : conditions) {
+                        if (cond_it.second == cond_idx)
+                            condition = cond_it.first;
+                    }
+                    outputTheta(ios::out | ios::app, 1, condition, cl_idx);
+                    outputG(ios::out | ios::app, 1, condition, cl_idx);
                 }
-
                 gibbsM(cond_idx, cl_idx);
 
                 end = std::chrono::high_resolution_clock::now();
@@ -531,7 +538,7 @@ namespace rs {
 
                 auto c = clusters.find(cluster);
                 if (c == clusters.end()) {
-                    if (DEBUG) printf("SKIP: cluster %s\n", cluster.c_str());
+                    if (DEBUG) printf("WARNING: skip cluster %s\n", cluster.c_str());
                     continue;
                 }
 
@@ -704,8 +711,8 @@ namespace rs {
             vector<vector<double>> mw(conditions.size()); // #conditions x #transcripts
             vector<vector<vector<double>>> z(conditions.size()); // #conditions x #clusters x #transcripts: z bias correction term
 
-            v_data.resize(conditions.size()); // #conditions x #clusters x #transcripts
-            v_sampling_data.resize(conditions.size()); // #conditions x #clusters x Sc
+            phi_data.resize(conditions.size()); // #conditions x #clusters x #transcripts
+            lf_sampling_data.resize(conditions.size()); // #conditions x #clusters x Sc
 
             for (auto cond_it : conditions) {
                 map<double, double> m_var; // LOCFIT m -> w
@@ -714,7 +721,7 @@ namespace rs {
                 vector<double> w_condition;
                 vector<double> mw_condition;
                 vector<vector<double>> z_condition(clusters.size());
-                vector<vector<double>> v_condition(clusters.size());
+                vector<vector<double>> phi_condition(clusters.size());
                 vector<vector<double>> v_sampling_condition(clusters.size());
 
                 for (auto cl_it : cluster_transcripts_map) {
@@ -725,61 +732,67 @@ namespace rs {
                     vector<double> z_cluster(num_transcripts, 0);
                     z_condition[cl_idx] = z_cluster;
 
-                    vector<double> v_cluster(num_transcripts, 0);
-                    v_condition[cl_idx] = v_cluster;
+                    vector<double> phi_cluster(num_transcripts, 0);
+                    phi_condition[cl_idx] = phi_cluster;
 
-                    vector<double> v_sampling_cluster(round(size_conditions[cond_idx][cl_idx]) + 1, 0);
+                    vector<double> v_sampling_cluster;
                     v_sampling_condition[cl_idx] = v_sampling_cluster;
                 }
 
-                for (auto t_it : transcripts) {
-                    string transcript = t_it.first;
-                    int t_idx = t_it.second;
-                    string cluster = transcript_cluster_map[transcript];
-                    int cl_idx = clusters[cluster];
+                ofstream lffile;
+                string lffile_name = "locfit_" + condition + ".dat";
+                lffile.open (lffile_name, ios::out | ios::trunc);
+                lffile << "Sc m\tw\tz\tcluster\ttranscripts\tr expression" << endl;
+                lffile.precision(20);
 
+                w_condition.push_back(0);
+                mw_condition.push_back(0);
+                for (auto cl_it : clusters) {
+                    string cluster = cl_it.first;
+                    int cl_idx = cl_it.second;
                     if (size_conditions[cond_idx][cl_idx] == 0) continue;
 
-                    double wt = 0;
-                    double zt = 0;
-                    double m = m_data[cond_idx][cl_idx][t_idx];
-                    if (m == 0) {
-                        w_condition.push_back(0);
-                        mw_condition.push_back(0);
-                        z_condition[cl_idx][t_idx] = 0;
-                        continue;
+                    size_t num_transcripts = cluster_transcripts_map[cluster].size();
+                    for (size_t t_idx = 0; t_idx < num_transcripts; t_idx++) {
+                        double wt = 0;
+                        double zt = 0;
+                        double Sc_m = m_data[cond_idx][cl_idx][t_idx] * size_conditions[cond_idx][cl_idx];
+
+                        double r_exp = 0;
+                        for (int r = 0; r < replicates[cond_idx]; r++) {
+                            double theta = (double) theta_data[cond_idx][cl_idx][r][t_idx];
+                            zt += 1. / size_replicates[cond_idx][r];
+                            wt += pow(theta / size_replicates[cond_idx][r] - Sc_m, 2);
+                            if (theta > 0) r_exp++;
+                        }
+
+                        wt /= (double) (replicates[cond_idx] - 1.);
+                        zt *= Sc_m / replicates[cond_idx];
+                        r_exp /= (double) replicates[cond_idx];
+
+                        w_condition.push_back(wt);
+                        mw_condition.push_back(Sc_m);
+                        z_condition[cl_idx][t_idx] = zt;
+
+                        lffile << Sc_m << "\t" << wt << "\t" << zt << "\t" << cluster << "\t" << num_transcripts << "\t" << r_exp << endl;
                     }
-
-                    for (int r = 0; r < replicates[cond_idx]; r++) {
-                        double theta = theta_data[cond_idx][cl_idx][r][t_idx];
-                        double sz = size_conditions[cond_idx][cl_idx] * size_replicates[cond_idx][r];
-                        wt += pow(theta/sz - m, 2.);
-                        zt += 1./sz;
-                    }
-
-                    wt /= (double) (replicates[cond_idx] - 1);
-                    zt *= m / (double) replicates[cond_idx];
-
-                    w_condition.push_back(wt);
-                    mw_condition.push_back(m);
-                    z_condition[cl_idx][t_idx] = zt;
                 }
+
+                lffile.close();
+
                 w[cond_idx] = w_condition;
                 mw[cond_idx] = mw_condition;
                 z[cond_idx] = z_condition;
 
                 // create files for R consumption
-
                 // write file for locfitting
                 ofstream ofile;
                 ofile.open (R_file, ios::out | ios::trunc);
                 ofile << "m\tw" << endl;
                 ofile.precision(20);
-
                 for (size_t i = 0; i < mw_condition.size(); i++) {
                     ofile << mw_condition[i] << "\t" << w_condition[i] << endl;
                 }
-
                 ofile.close();
 
                 printf("Running locfit for %s\n", condition.c_str());
@@ -789,18 +802,15 @@ namespace rs {
                 ifstream ifile;
                 ifile.open(R_file, ios::in);
                 if (ifile.is_open()) {
+                    getline(ifile, line); // header line
                     size_t l = 0;
                     while (getline(ifile, line)) {
                         vector<string> tokens = split(line, '\t');
-                        // m, w, poisson
-                        double w = boost::lexical_cast<double>(tokens[2].c_str()); // try poisson
+                        // m, w, gamma
+                        double w = boost::lexical_cast<double>(tokens[2].c_str());
                         double m = mw_condition[l];
                         m_var[m] = w;
-                        if (m > 0) {
-                            if (w <= 0)
-                                printf("Line %zu: %s\n", l, line.c_str());
-                            assert(w > 0);
-                        }
+                        if (m > 0) assert(w > 0);
                         l++;
                     }
                     assert(l == mw_condition.size());
@@ -810,6 +820,10 @@ namespace rs {
                 }
 
                 printf("Finished parsing %s\n", R_file.c_str());
+
+                ifstream src("locfit.save", ios::binary);
+                ofstream dst(condition + ".save", ios::trunc | ios::binary);
+                dst << src.rdbuf();
 
                 if (DEBUG) { // keep copies of the locfit output files
                     ifstream src(R_file);
@@ -825,19 +839,15 @@ namespace rs {
                     string cluster = transcript_cluster_map[transcript];
                     int cl_idx = clusters[cluster];
 
-                    double m = m_data[cond_idx][cl_idx][t_idx];
-                    if (m != 0) {
-                        assert(m_var.find(m) != m_var.end());
-                        v_condition[cl_idx][t_idx] = m + m_var[m] - z_condition[cl_idx][t_idx];
-                        if (v_condition[cl_idx][t_idx] <= 0) {
-                            printf("WARNING: variance <= 0: m + w(%e) - z = %e + %e - %e = %e\n", m, m, m_var[m], z_condition[cl_idx][t_idx], v_condition[cl_idx][t_idx]);
-                        }
-                    } else
-                        v_condition[cl_idx][t_idx] = 0;
+                    double Sc_m = m_data[cond_idx][cl_idx][t_idx] * size_conditions[cond_idx][cl_idx];
+                    if (Sc_m != 0) {
+                        assert(m_var.find(Sc_m) != m_var.end());
+                        phi_condition[cl_idx][t_idx] = m_var[Sc_m] - z_condition[cl_idx][t_idx];
+                    }
                 }
 
-                v_data[cond_idx] = v_condition;
-                v_sampling_data[cond_idx] = v_sampling_condition;
+                phi_data[cond_idx] = phi_condition;
+                lf_sampling_data[cond_idx] = v_sampling_condition;
             }
         }
 
@@ -905,7 +915,8 @@ namespace rs {
         // returns ln (Pr(theta | m))
         double negBinomialDist(int theta, double p, double q) {
             errno = 0;
-            size_t a = theta + std::max(round(q), 1.) - 1;
+            q = std::max(round(q), 1.);
+            size_t a = theta + q - 1;
             double r = lnFactorial(a) - lnFactorial((size_t)theta) - lnFactorial(a - theta);
             double l = r + q * log(1. - p) + (double)theta * log(p);
 
@@ -972,17 +983,25 @@ namespace rs {
                 }
 
                 double m = m_data[cond_idx][cl_idx][t];
-                double v = v_data[cond_idx][cl_idx][t];
+                double v = size_replicates[cond_idx][r] * size_conditions[cond_idx][cl_idx] * m
+                         + pow(size_replicates[cond_idx][r], 2) * phi_data[cond_idx][cl_idx][t];
 
                 double denom, factor, prob_theta;
-                int erange_errors = 0, total_probs = 0;
-                if (v != 0 && m != 0) {
-                    double p = 1. - m / ((double)sz * v);
-                    double q = ((double)sz * m * m) / ((double)sz * v - m);
+                if (m != 0 && m != 1) {
+                    if (v <= 0) {
+                        printf("Sr * Sc * m + Sr^2 * phi = %f * %f * %e + %f^2 * %f = %f\n", size_replicates[cond_idx][r], size_conditions[cond_idx][cl_idx], m, size_replicates[cond_idx][r], phi_data[cond_idx][cl_idx][t], v);
+                    }
+                    assert (v > 0);
+
+                    double p = 1. - (size_replicates[cond_idx][r] * size_replicates[cond_idx][r] * m) / v;
+                    double q = size_replicates[cond_idx][r] * size_conditions[cond_idx][cl_idx] * m * (1. - p) / p;
+
+                    if (DEBUG) printf("Transcript [%i] = %i (%f x %f) with #%i G, m = %f, v = %f, phi = %f\n\tp = %e, q = %e, sum(theta) = %f\n", t, theta[t], size_replicates[cond_idx][r], size_conditions[cond_idx][cl_idx], g_transcript, m, v, phi_data[cond_idx][cl_idx][t], p, q, th_sum);
+
+                    q = round(q);
 
                     if (p <= 0 || p >= 1) printf("ERROR: p = %.20e, q = %.20e, m = %f, v = %f, Sr = %f, Sc = %f [cluster %s]\n", p, q, m, v, size_replicates[cond_idx][r],  size_conditions[cond_idx][cl_idx], cluster_vector[cl_idx].c_str());
-
-                    if (size_conditions[cond_idx][cl_idx] * size_replicates[cond_idx][r] > THRESHOLD) {
+                    if (false && size_conditions[cond_idx][cl_idx] * size_replicates[cond_idx][r] > THRESHOLD) {
                         int min_theta = floor(std::max(0., m - 3*pow(v, 0.5)) * size_conditions[cond_idx][cl_idx]) + 1;
                         int max_theta = ceil(std::min(1., m + 3*pow(v, 0.5)) * size_conditions[cond_idx][cl_idx]);
 
@@ -994,32 +1013,10 @@ namespace rs {
 
                             prob_theta = negBinomialDist(theta_candidate, p, q); // ln()
                             denom = th_sum - (double)theta[t] + (double)theta_candidate;
-                            if (denom == 0) {
-                                printf("ERROR: sum(theta) = 0 for cond[%i], cluster[%i], tr[%i], theta[%i]\n", cond_idx, cl_idx, t, theta[t]);
-                            } else {
-                                double frac = (double)theta_candidate / denom;
-                                if (errno != 0) {
-                                    printf("ERROR: error occurred in gibbsTheta: %s\n", strerror(errno));
-                                    assert(false);
-                                }
-                                errno = 0;
-                                factor = g_transcript * log(frac);
-                                if (errno == ERANGE) {
-                                    printf("ERROR: operation overflowed: g_transcript * log(factor) = %i * log(%e) = %e\n", g_transcript, frac, factor);
-                                    assert(false);
-                                }
+                            double frac = (double)theta_candidate / denom;
+                            factor = g_transcript * log(frac);
+                            theta_probs[th] = exp(prob_theta + factor);
 
-                                theta_probs[th] = exp(prob_theta + factor);
-                                if (errno == ERANGE) {
-                                    if (prob_theta + factor > 0) {
-                                        printf("ERROR: operation overflowed (positive) exp(%f)\n", prob_theta + factor);
-                                        assert(false);
-                                    }
-                                    erange_errors++;
-                                    errno = 0;
-                                }
-                                if (theta_probs[th] != 0) total_probs++;
-                            }
                         }
                         
                         boost::random::discrete_distribution<> distribution(theta_probs.begin(), theta_probs.end());
@@ -1040,30 +1037,31 @@ namespace rs {
 
                     }
 
-                    /*if (erange_errors > 0)
-                        printf("\t\t%s\t%i erange errors : %i nonzero sampling P(theta|...) for transcript %i/%i (v = %e, m = %e) (sz = %i)\n", currentDateTime().c_str(), erange_errors, total_probs, t, num_transcripts, v, m, sz);*/
-                } else {
-                    //printf("WARNING: v[%e], m[%e] for cond[%i], cluster[%i], tr[%i], theta[%i]\n", v, m, cond_idx, cl_idx, t, theta[t]);
+                    if (DEBUG) {
+                        for (size_t i = 0; i < theta_probs.size(); ++i) {
+                            printf("\t%zu\t%e\n", i, theta_probs[i]);
+                        }
+                        printf("\tOutcome: %i\n", theta[t]);
+                    }
                 }
-
             }
             theta_mutex.lock();
             theta_data[cond_idx][cl_idx][r] = theta;
             theta_mutex.unlock();
-
-            if (DEBUG) {
-                string condition = "";
-                for (auto cond_it : conditions) {
-                    if (cond_it.second == cond_idx)
-                        condition = cond_it.first;
-                }
-                outputTheta(ios::out | ios::app, 1, condition, cl_idx);
-            }
         }
 
         // returns vector of w(m) values given cluster
         vector<double> locfitM (int cond_idx, int cl_idx, string data_file) {
-            printf("Calling locfit predict on %s\n", data_file.c_str());
+            vector<double> w_values;
+
+            string condition;
+            for (auto cond_it : conditions) {
+                if (cond_it.second == cond_idx) {
+                    condition = cond_it.first;
+                    break;
+                }
+            }
+
             auto begin = std::chrono::high_resolution_clock::now();
             auto end = std::chrono::high_resolution_clock::now();
             auto dur = end - begin;
@@ -1074,7 +1072,7 @@ namespace rs {
             string R_filename = std::to_string(cond_idx) + "_" + cluster + ".R";
             ofile.open (R_filename, ios::out | ios::trunc);
             ofile << "library(\"locfit\");" << endl;
-            ofile << "load(\"locfit.save\");" << endl;
+            ofile << "load(\"" << condition << ".save\");" << endl;
             ofile << "dat <- read.table(\"" << data_file << "\", header=TRUE);" << endl;
             ofile << "result <- predict(fit, dat[,\"m\"]);" << endl;
             ofile << "dat$v <- result;" << endl;
@@ -1087,13 +1085,13 @@ namespace rs {
             string line;
             ifstream ifile;
             ifile.open(data_file, ios::in);
-            vector<double> v_values;
             if (ifile.is_open()) {
                 size_t l = 0;
                 while (getline(ifile, line)) {
                     vector<string> tokens = split(line, '\t');
                     double w = boost::lexical_cast<double>(tokens[1].c_str());
-                    v_values.push_back(w);
+                    if (w < 0) w = 0;
+                    w_values.push_back(w);
                     l++;
                 }
                 ifile.close();
@@ -1102,14 +1100,16 @@ namespace rs {
             }
 
             remove(R_filename.c_str());
-            printf("Completed: locfit predict on %s [%f ms]\n", data_file.c_str(), (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+            end = std::chrono::high_resolution_clock::now();
+            dur = end - begin;
+            printf("\t\tLocfit predict on %s [%f ms]\n", data_file.c_str(), (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
 
-            return v_values;
+            return w_values;
         }
 
         void gibbsM(int cond_idx, int cl_idx) {
             if (size_conditions[cond_idx][cl_idx] == 0) {
-                printf("Skipping cluster %i:%s due to Sc = 0\n", cl_idx, cluster_vector[cl_idx].c_str());
+                printf("WARNING: Skipping cluster %i:%s due to Sc = 0 for condition [%i]\n", cl_idx, cluster_vector[cl_idx].c_str(), cond_idx);
                 return;
             }
 
@@ -1122,35 +1122,44 @@ namespace rs {
             m_file.open (m_filename, ios::out | ios::trunc);
             m_file << "m" << endl;
             for (int sz = 0; sz <= Sc; sz++) {
-                m_file << (double)sz / size_conditions[cond_idx][cl_idx] << endl;
+                m_file << sz << endl; // m_candidate = sz / Sc; calculating phi(Sc * m)
             }
             m_file.close();
 
-            vector<double> v_values = locfitM(cond_idx, cl_idx, m_filename);
+            vector<double> v_values = lf_sampling_data[cond_idx][cl_idx]; // #conditions x #clusters x Sc;
+            if (v_values.size() == 0) {
+                v_values = locfitM(cond_idx, cl_idx, m_filename);
+                vm_mutex.lock();
+                lf_sampling_data[cond_idx][cl_idx] = v_values;
+                vm_mutex.unlock();
+            }
             assert(v_values.size() == (Sc + 1));
 
             // calculate z (bias factor) = sum(1/SrSc) * m/R
             double z = 0;
             for (int r = 0; r < replicates[cond_idx]; r++) {
-                z += (double) 1. / (size_replicates[cond_idx][r] * size_conditions[cond_idx][cl_idx]);
+                z += (double) 1. / (size_replicates[cond_idx][r]);
             }
             z /= (double) replicates[cond_idx];
 
             for (size_t i = 0; i < v_values.size(); i++) {
-                double m_candidate = (double)i / size_conditions[cond_idx][cl_idx];
-                v_values[i] += m_candidate - z * m_candidate;
+                double Sc_m = (double) i;
+                v_values[i] -=  z;
+                v_values[i] *= pow(size_replicates[cond_idx][0], 2);
+                v_values[i] += size_replicates[cond_idx][0] * Sc_m; // TODO: missing Sr here?
 
-                assert(v_values[i] > 0);
+                if (i > 0) assert(v_values[i] > 0);
             }
 
             remove(m_filename.c_str());
 
             for (int t = 0; t < (int)m.size(); t++) {
-                if (m[t] == 0) continue;
+                if (m[t] == 0 || m[t] == 1) continue;
 
                 // limit probability vector to +-3 std dev
                 double min_m = 0, max_m = 0;
-                double v = v_data[cond_idx][cl_idx][t];
+                double v = pow(size_replicates[cond_idx][0], 2) * phi_data[cond_idx][cl_idx][t] + m_data[cond_idx][cl_idx][t] * size_conditions[cond_idx][cl_idx] * size_replicates[cond_idx][0]; // TODO: missing Sr?
+                assert(v > 0);
 
                 for (int r = 0; r < replicates[cond_idx]; r++) {
                     min_m += (double) theta_data[cond_idx][cl_idx][r][t] / size_replicates[cond_idx][r];
@@ -1165,20 +1174,18 @@ namespace rs {
                 max_m = ceil(max_m);
 
                 min_m = std::max(0., min_m);
-                max_m = std::min(Sc, max_m); // TODO: what happens if max_m is 0? do we set this m = 0 or 1/Sc (current)
+                max_m = std::min(Sc, max_m);
 
                 vector<double> m_probs(max_m);
-                int erange_errors = 0, total_probs = 0;
 
                 for (int sz = 1; sz <= (int)m_probs.size(); sz++) {
                     double product = 1;
                     double m_candidate = (double)sz / Sc;
-                    double v_candidate = v_values[sz];
+                    double v_candidate = pow(size_conditions[cond_idx][cl_idx], 2) * v_values[sz] + m_candidate * size_conditions[cond_idx][cl_idx];
                     for (int r = 0; r < replicates[cond_idx]; r++) {
-                        double s = round(size_conditions[cond_idx][cl_idx] * size_replicates[cond_idx][r]);
-                        double p = 1. - m_candidate / (s * v_candidate);
-                        double q = ((double)sz * m_candidate * m_candidate) / (s * v_candidate - m_candidate);
-
+                        double p = 1. - (size_replicates[cond_idx][r] * size_replicates[cond_idx][r] * m_candidate) / (v_candidate);
+                        double q = size_conditions[cond_idx][cl_idx] * size_replicates[cond_idx][r] * m_candidate * (1. - p) / p;
+                        q = round(q);
                         int theta = theta_data[cond_idx][cl_idx][r][t];
 
                         if (p <= 0 || p == 1) {
@@ -1200,22 +1207,46 @@ namespace rs {
                             assert(false);
                         }
                         errno = 0;
-                        erange_errors++;
                     }
-                    if (m_probs[sz - 1] > 0) total_probs++;
                 }
-                /*if (erange_errors > 0)
-                    printf("\t\t%s\t%i erange errors : %i nonzero sampling P(m|...) for transcript %i/%zu\n", currentDateTime().c_str(), erange_errors, total_probs, t, m.size());*/
 
                 boost::random::discrete_distribution<> distribution(m_probs.begin(), m_probs.end());
                 m[t] = ((double) distribution(generator) + 1.) / Sc;
-                //printf("gibbsM: m %f->%f from (%f, %f) out of possible %f\n", m_data[cond_idx][cl_idx][t], m[t], min_m, max_m, Sc);
             }
 
             normalize(m);
             m_mutex.lock();
             m_data[cond_idx][cl_idx] = m;
             m_mutex.unlock();
+
+            // set variance values for m
+            vector<double> z_values;
+            double z_template = 0;
+            for (int r = 0; r < replicates[cond_idx]; r++) {
+                z_template += 1. / size_replicates[cond_idx][r];
+            }
+            z_template *= size_conditions[cond_idx][cl_idx] / (double)replicates[cond_idx];
+
+            m_filename = cluster_vector[cl_idx] + ".dat";
+            m_file.open (m_filename, ios::out | ios::trunc);
+            m_file << "m" << endl;
+            for (double m_val : m) {
+                m_file << m_val << endl;
+                z_values.push_back(z_template * m_val);
+            }
+            m_file.close();
+
+            vector<double> phi_values = locfitM(cond_idx, cl_idx, m_filename);
+            assert(z_values.size() == phi_values.size());
+            for (size_t i = 0; i < phi_values.size(); ++i) {
+                phi_values[i] -= z_values[i];
+            }
+
+            phi_mutex.lock();
+            phi_data[cond_idx][cl_idx] = phi_values;
+            phi_mutex.unlock();
+
+            remove(m_filename.c_str());
         }
 
         void normalize(vector<double>& v) {
@@ -1251,17 +1282,8 @@ namespace rs {
                     m_file << m_data[cond_idx][cl_idx][t_idx] << "\t";
                 }
 
-                for (int r = 0; r < replicates[cond_idx]; r++) {
-                    theta_file << r << ":" << size_replicates[cond_idx][r] << ":" << size_conditions[cond_idx][cl_idx] << "\t";
-                    for (int t_idx = 0; t_idx < (int)m_data[cond_idx][cl_idx].size(); t_idx++) {
-                        theta_file << theta_data[cond_idx][cl_idx][r][t_idx] << "\t";
-                    }
-                    theta_file << endl;
-                }
-
                 m_file << endl;
                 m_file.close();
-                theta_file.close();
             }
             m_Gibbs[i][cond_idx] = m_data[cond_idx];
         }
@@ -1270,6 +1292,7 @@ namespace rs {
         void outputTheta(std::ios_base::openmode mode, int i, string condition, int cl_idx) {
             int cond_idx = conditions[condition];
             string cluster = cluster_vector[cl_idx];
+            vector<vector<int>> theta = theta_data[cond_idx][cl_idx];
 
             ofstream theta_file;
             string file_name = "out/theta_" + condition + "." + cluster + ".dat";
@@ -1288,12 +1311,44 @@ namespace rs {
             for (int r = 0; r < replicates[cond_idx]; r++) {
                 theta_file << r << ":" << size_replicates[cond_idx][r] << " | " << size_conditions[cond_idx][cl_idx] << "\t";
                 for (int t_idx = 0; t_idx < (int)m_data[cond_idx][cl_idx].size(); t_idx++) {
-                    theta_file << theta_data[cond_idx][cl_idx][r][t_idx] << "\t";
+                    theta_file << theta[r][t_idx] << "\t";
                 }
                 theta_file << endl;
             }
             theta_file.close();
         }
+
+        // for debugging: prints m and theta vector after every iteration in out/cluster.dat files
+        void outputG(std::ios_base::openmode mode, int i, string condition, int cl_idx) {
+            int cond_idx = conditions[condition];
+            string cluster = cluster_vector[cl_idx];
+
+            ofstream g_file;
+            string file_name = "out/G_" + condition + "." + cluster + ".dat";
+            g_file.open (file_name.c_str(), mode);
+
+            vector<vector<int>> G = G_data[cond_idx][cl_idx]; // #replicates x #sigmers
+            assert(G.size() == (size_t)replicates[cond_idx]);
+
+            // print header line
+            if (i == 0) {
+                for (size_t s = 0; s < G[0].size(); s++) {
+                    g_file << s << "\t";
+                }
+                g_file << endl;
+            }
+
+            for (int r = 0; r < replicates[cond_idx]; r++) {
+                for (size_t s = 0; s < G[r].size(); s++) {
+                    g_file << G[r][s] << "\t";
+                }
+                g_file << endl;
+            }
+
+            g_file << endl;
+            g_file.close();
+        }
+
 
         vector<string> split(const string &s, char delim) {
             vector<string> elems;
@@ -1333,11 +1388,9 @@ namespace rs {
                 return ln_factorials[n];
             }
 
-            if (DEBUG) printf("Extending ln_factorials from %zu to %zu\n", ln_factorials.size() - 1, n);
-            lnFact_mutex.lock();
-            calcLogFactorials(n);
-            lnFact_mutex.unlock();
-            return ln_factorials[n];
+            double stirling = (double) n * log(n) - (double) n;
+            if (DEBUG) printf("Using stirling's approx for ln(%zu!) = %f\n", n, stirling);
+            return stirling;
         }
 
         const string currentDateTime() {
@@ -1375,15 +1428,16 @@ namespace rs {
         std::mutex m_mutex;
         std::mutex theta_mutex;
         std::mutex perf_mutex;
-        std::mutex lnFact_mutex;
+        std::mutex vm_mutex;
+        std::mutex phi_mutex;
 
         vector<vector<vector<vector<int>>>> theta_data; // #conditions x #clusters x #replicates x #transcripts: occurrences of (general) sigmers per transcript
         vector<vector<vector<int>>> F_data; // #clusters x #sigmers x #transcripts: num (specific) sigmer per transcript
         vector<vector<int>> L_data; // #clusters x #transcripts: num (general) sigmers per transcript
         vector<vector<vector<vector<int>>>> G_data; // #conditions x #clusters x #replicates x #sigmers: transcript id (from transcripts)
         vector<vector<vector<double>>> m_data; // #conditions x #clusters x #transcripts: probability that general sigmer belongs to a transcript
-        vector<vector<vector<double>>> v_data; // #conditions x #clusters x #transcripts: variance of m
-        vector<vector<vector<double>>> v_sampling_data; // #conditions x #clusters x (#Sc + 1): variance of m = i/Sc
+        vector<vector<vector<double>>> phi_data; // #conditions x #clusters x #transcripts: phi(Sc m)
+        vector<vector<vector<double>>> lf_sampling_data; // #conditions x #clusters x (#Sc + 1): w(m), m = i/Sc
         vector<vector<vector<vector<double>>>> m_Gibbs; // 1000 x #conditions x #clusters x #transcripts: m data over all 1000 iterations
         vector<vector<vector<vector<vector<double>>>>> theta_P_data; // P(theta | m) #conditions x #replicates x #clusters x #transcripts x #SrSc based on m_data
 
