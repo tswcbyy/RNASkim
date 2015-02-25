@@ -1131,29 +1131,19 @@ namespace rs {
             }
             m_file.close();
 
-            vector<double> v_values = lf_sampling_data[cond_idx][cl_idx]; // #conditions x #clusters x Sc;
-            if (v_values.size() == 0) {
-                v_values = locfitM(cond_idx, cl_idx, m_filename);
+            vector<double> phi_values = lf_sampling_data[cond_idx][cl_idx]; // #conditions x #clusters x Sc;
+            if (phi_values.size() == 0) {
+                phi_values = locfitM(cond_idx, cl_idx, m_filename);
                 vm_mutex.lock();
-                lf_sampling_data[cond_idx][cl_idx] = v_values;
+                lf_sampling_data[cond_idx][cl_idx] = phi_values;
                 vm_mutex.unlock();
             }
-            assert(v_values.size() == (Sc + 1));
+            assert(phi_values.size() == (Sc + 1));
 
-            // calculate z (bias factor) = sum(1/SrSc) * m/R
-            double z = 0;
-            for (int r = 0; r < replicates[cond_idx]; r++) {
-                z += (double) 1. / (size_replicates[cond_idx][r]);
-            }
-            z /= (double) replicates[cond_idx];
-
-            for (size_t i = 0; i < v_values.size(); i++) {
+            for (size_t i = 0; i < phi_values.size(); i++) {
                 double Sc_m = (double) i;
-                v_values[i] -=  z;
-                v_values[i] *= pow(size_replicates[cond_idx][0], 2);
-                v_values[i] += size_replicates[cond_idx][0] * Sc_m; // TODO: missing Sr here?
-
-                if (i > 0) assert(v_values[i] > 0);
+                double m = Sc_m/size_conditions[cond_idx][cl_idx];
+                phi_values[i] -=  getZ(cond_idx, cl_idx, m);
             }
 
             remove(m_filename.c_str());
@@ -1163,7 +1153,7 @@ namespace rs {
 
                 // limit probability vector to +-3 std dev
                 double min_m = 0, max_m = 0;
-                double v = pow(size_replicates[cond_idx][0], 2) * phi_data[cond_idx][cl_idx][t] + m_data[cond_idx][cl_idx][t] * size_conditions[cond_idx][cl_idx] * size_replicates[cond_idx][0]; // TODO: missing Sr?
+                double v = getV(cond_idx, cl_idx, 0, m[t], phi_data[cond_idx][cl_idx][t]); // Rough estimation of v (using replicate 0)
                 assert(v > 0);
 
                 for (int r = 0; r < replicates[cond_idx]; r++) {
@@ -1172,8 +1162,8 @@ namespace rs {
                 min_m /= size_conditions[cond_idx][cl_idx];
                 max_m = min_m;
 
-                min_m -= (3. * size_conditions[cond_idx][cl_idx] * pow(v, 0.5));
-                max_m += (3. * size_conditions[cond_idx][cl_idx] * pow(v, 0.5));
+                min_m -= (4. * size_conditions[cond_idx][cl_idx] * pow(v, 0.5));
+                max_m += (4. * size_conditions[cond_idx][cl_idx] * pow(v, 0.5));
 
                 min_m = floor(min_m);
                 max_m = ceil(max_m);
@@ -1185,9 +1175,12 @@ namespace rs {
 
                 for (int sz = 1; sz <= (int)m_probs.size(); sz++) {
                     double product = 1;
-                    double m_candidate = (double)sz / Sc;
-                    double v_candidate = pow(size_conditions[cond_idx][cl_idx], 2) * v_values[sz] + m_candidate * size_conditions[cond_idx][cl_idx];
+                    double Scj = size_conditions[cond_idx][cl_idx];
+                    double m_candidate = (double)sz / Scj;
+
                     for (int r = 0; r < replicates[cond_idx]; r++) {
+                        double v_candidate = getV(cond_idx, cl_idx, r, m_candidate, phi_values[sz]);
+
                         double p = getP(cond_idx, cl_idx, r, m_candidate, v_candidate);
                         double q = getQ(cond_idx, cl_idx, r, m_candidate, p);
                         q = round(q);
@@ -1233,7 +1226,7 @@ namespace rs {
             }
             m_file.close();
 
-            vector<double> phi_values = locfitM(cond_idx, cl_idx, m_filename);
+            phi_values = locfitM(cond_idx, cl_idx, m_filename);
             assert(m.size() == phi_values.size());
             for (size_t i = 0; i < phi_values.size(); ++i) {
                 phi_values[i] -= getZ(cond_idx, cl_idx, m[i]);
@@ -1286,6 +1279,7 @@ namespace rs {
         }
 
         double getZ(int cond_idx, int cl_idx, double m) {
+            return 0;
             double z = 0;
             double Sc = size_conditions[cond_idx][cl_idx];
             for (int r = 0; r < replicates[cond_idx]; r++) {
