@@ -113,10 +113,17 @@ namespace rs {
             }
 
             // F_data, G_data, L_data
-            parseCFData(cf_files[0][0], sampling_factor);
+            parseSKData(sk_files[0][0], sampling_factor);
             if (DEBUG) {
-                printf("CF data: complete\n");
+                printf("SK data: complete\n");
             }
+
+            for (auto cond_it : conditions) {
+                for (int r = 0; r < replicates[cond_it.second]; r++) {
+                    parseCFData(cf_files[cond_it.second][r], cond_it.second, r);
+                }
+            }
+            if (DEBUG) printf("CF data: complete\n");
 
             // size_replicates, size_conditions
             calcSizeFactors();
@@ -395,9 +402,10 @@ namespace rs {
                     string condition;
                     string cf_file;
                     string em_file;
+                    string sk_file;
 
                     getline(linestream, condition, '\t');
-                    linestream >> cf_file >> em_file;
+                    linestream >> cf_file >> sk_file >> em_file;
 
                     auto c = conditions.find(condition);
                     if (c == conditions.end()) { // new condition
@@ -411,12 +419,17 @@ namespace rs {
                         vector<string> em;
                         em.push_back(em_file);
                         em_files.push_back(em);
+
+                        vector<string> sk;
+                        sk.push_back(sk_file);
+                        sk_files.push_back(sk);
                     } else {
                         int c_idx = conditions[condition];
                         replicates[c_idx]++;
 
                         cf_files[c_idx].push_back(cf_file);
                         em_files[c_idx].push_back(em_file);
+                        sk_files[c_idx].push_back(sk_file);
                     }
                 }
                 ifile.close();
@@ -506,9 +519,78 @@ namespace rs {
                     istream.close();
                 }
             }
+
+            G_data.resize(conditions.size());
+            for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
+                vector<vector<vector<int>>> G_condition_data(clusters.size());
+                for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
+                    vector<vector<int>> G_cluster_data(replicates[cond_idx]);
+                    for (int r = 0; r < replicates[cond_idx]; r++) {
+                        vector<int> sigmer_cluster = theta_data[cond_idx][cl_idx][r];
+                        G_cluster_data[r] = vector<int>();
+                    }
+
+                    G_condition_data[cl_idx] = G_cluster_data;
+                }
+                G_data[cond_idx] = G_condition_data;
+            }
+            G_sigmer_idx = G_data;
         }
 
-        void parseCFData(const string cf, const double sampling_factor_) {
+        void parseCFData(const string file_name, int cond_idx, int r) {
+             /* G_data; #conditions x #clusters x #replicates x #sigmers occurrences: transcript id (from transcripts) */
+
+            if (DEBUG) printf("Reading file for G matrix: %s\n", file_name.c_str());
+            fstream istream(file_name, ios::in | ios::binary);
+            SelectedKey sk;
+            int buffer_size = 200000000;
+            ::google::protobuf::uint8 * buffer =
+            new ::google::protobuf::uint8[buffer_size];
+
+            // each sk is a cluster of sigmers
+            // sk.keys is the group of sigmers associated with each cluster
+            // sk.keys(j).transcript_infos is the group of transcripts each sk.keys(j) sigmer is assoc with
+            // sk.keys(j).transcript_infos(k).tidx is the transcript identifier
+            // sk.keys(j).transcript_infos(k).positions_size() is the number of times a sigmer appears in the transcript
+            while(load_protobuf_data(&istream, &sk, buffer, buffer_size)) {
+                string cluster = sk.gid().c_str();
+
+                auto c = clusters.find(cluster);
+                if (c == clusters.end()) {
+                    if (DEBUG) printf("WARNING: skip cluster %s\n", cluster.c_str());
+                    continue;
+                }
+                int cl_idx = clusters[cluster];
+
+                // iterate over sigmers
+                vector<int> G;
+                vector<int> G_sigmer;
+
+                int num_sigmers = 0;
+                for (int s = 0; s < sk.keys_size(); s++) {
+                    num_sigmers += sk.keys(s).count();
+
+                    if (sk.keys(s).count() > 0) {
+                        string sigmer = sk.keys(s).key();
+                        int s_idx = F_sigmer_idx[sigmer];
+
+                        G_sigmer.resize(num_sigmers, s_idx);
+                    }
+                }
+                G.resize(num_sigmers);
+
+                G_data[cond_idx][cl_idx][r] = G;
+                G_sigmer_idx[cond_idx][cl_idx][r] = G_sigmer;
+
+                int theta_sum = std::accumulate(theta_data[cond_idx][cl_idx][r].begin(), theta_data[cond_idx][cl_idx][r].end(), 0);
+                if (num_sigmers != theta_sum) {
+                    printf("%s: cluster %s theta sum = %i, sigmer count = %i\n", file_name.c_str(), cluster.c_str(), theta_sum, num_sigmers);
+                }
+                
+            }
+        }
+
+        void parseSKData(const string file_name, const double sampling_factor_) {
             /* F_data; #clusters x #sigmers x #transcripts: num (specific) sigmer per transcript
              * L_data; #clusters x #transcripts: num (general) sigmers per transcript
              * G_data; #conditions x #clusters x #replicates x #sigmers: transcript id (from transcripts) */
@@ -516,22 +598,12 @@ namespace rs {
             std::default_random_engine generator;
             std::uniform_real_distribution<double> distribution(0.0,1.0);
 
-            G_data.resize(conditions.size());
-            for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
-                vector<vector<vector<int>>> G_condition_data(clusters.size());
-                for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
-                    vector<vector<int>> G_cluster_data(replicates[cond_idx]);
-                    G_condition_data[cl_idx] = G_cluster_data;
-                }
-                G_data[cond_idx] = G_condition_data;
-            }
-
             L_data.resize(clusters.size());
             F_data.resize(clusters.size());
             F_sigmers.resize(clusters.size());
 
-            if (DEBUG) printf("Reading file for F matrix: %s\n", cf.c_str());
-            fstream istream(cf, ios::in | ios::binary);
+            if (DEBUG) printf("Reading file for F matrix: %s\n", file_name.c_str());
+            fstream istream(file_name, ios::in | ios::binary);
             SelectedKey sk;
             int buffer_size = 200000000;
             ::google::protobuf::uint8 * buffer =
@@ -566,7 +638,7 @@ namespace rs {
                 }
 
                 // iterate over sigmers
-                sigmers:
+                process_sigmers:
                 for (int s = 0; s < sk.keys_size(); s++) {
                     // create vector -- size = num_transcripts per cluster, each entry is number of times a sigmer appears in the transcript
                     vector<int> F_sigmer_data(num_transcripts, 0);
@@ -579,10 +651,11 @@ namespace rs {
 
                     string sigmer = sk.keys(s).key();
                     F_cluster_sigmer.push_back(sigmer);
+                    F_sigmer_idx[sigmer] = F_cluster_sigmer.size() - 1;
                     // iterate over the transcripts associated with the sigmers
                     for (int t = 0; t < sk.keys(s).transcript_infos_size(); t++) {
                         int tidx = sk.keys(s).transcript_infos(t).tidx();
-                        string transcript = sk.tids(tidx); // TODO: Verify this?
+                        string transcript = sk.tids(tidx);
 
                         int t_idx = transcripts[transcript];
                         int sigmer_count = sk.keys(s).transcript_infos(t).positions_size();
@@ -597,24 +670,13 @@ namespace rs {
                     if (F_cluster_data.size() == 0) {
                         sampling_factor *= 1.1;
                         printf("Re-sampling with sampling factor = %f\n", sampling_factor);
-                        goto sigmers;
+                        goto process_sigmers;
                     }
                 }
 
                 F_data[cl_idx] = F_cluster_data;
                 L_data[cl_idx] = L_cluster_data;
                 F_sigmers[cl_idx] = F_cluster_sigmer;
-
-                // populate initial G_data
-                for (int cond_idx = 0; cond_idx < (int)conditions.size(); cond_idx++) {
-                    for (int r = 0; r < replicates[cond_idx]; r++) {
-                        vector<int> theta_replicate_data = theta_data[cond_idx][cl_idx][r];
-                        auto max_idx = std::max_element(theta_replicate_data.begin(), theta_replicate_data.end());
-                        int g = std::distance(theta_replicate_data.begin(), max_idx);
-                        vector<int> G_sigmer_data(F_cluster_data.size(), g);
-                        G_data[cond_idx][cl_idx][r] = G_sigmer_data;
-                    }
-                }
             }
         }
 
@@ -945,22 +1007,24 @@ namespace rs {
         void gibbsG(int cond_idx, int r, int cl_idx) {
             // 1) For each cluster c, for each replicate r, for each sigmer occurrence s: re-sample G (transcript)
             //      P(G = t | ...) = theta_t * F_s,t / L_t
-
             // initializations
             vector<int> G = G_data[cond_idx][cl_idx][r]; // #sigmers: transcript id (from transcripts)
             vector<int> theta = theta_data[cond_idx][cl_idx][r]; // #transcripts: occurrences of (general) sigmers per transcript
             vector<vector<int>> F = F_data[cl_idx]; // #sigmers x #transcripts
             vector<int> L = L_data[cl_idx]; // #transcripts
 
+            if (G.size() == 0) return;
+
             int sigmer_count = (int)G.size();
             for (int s = 0; s < sigmer_count; s++) {
                 vector<double> G_probs;
+                int s_idx = G_sigmer_idx[cond_idx][cl_idx][r][s];
                 // choose random t from distribution over all t: theta[r][t] * F[s][t] / L[t]
                 for (int t = 0; t < (int)theta.size(); t++) {
                     if (L[t] == 0)
                         G_probs.push_back(0);
                     else
-                        G_probs.push_back(theta[t] * F[s][t] / L[t]);
+                        G_probs.push_back((double)theta[t] * (double)F[s_idx][t] / (double)L[t]);
                 }
 
                 double prob_sum = std::accumulate(G_probs.begin(), G_probs.end(), 0.0);
@@ -1489,6 +1553,7 @@ namespace rs {
         vector<int> replicates; // #conditions: number of replicates
         vector<vector<string>> cf_files; // #conditions x #replicates: cf file names
         vector<vector<string>> em_files; // #conditions x #replicates: em file names
+        vector<vector<string>> sk_files; // #conditions x #replicates: sk file names
 
         map<string, vector<string>> cluster_transcripts_map; // cluster -> list of associated transcripts
         map<string, string> transcript_cluster_map; // transcript -> corresponding cluster
@@ -1509,8 +1574,10 @@ namespace rs {
         vector<vector<vector<vector<int>>>> theta_data; // #conditions x #clusters x #replicates x #transcripts: occurrences of (general) sigmers per transcript
         vector<vector<vector<int>>> F_data; // #clusters x #sigmers x #transcripts: num (specific) sigmer per transcript
         vector<vector<string>> F_sigmers; // #clusters x #sigmers: sigmers
+        map<string, int> F_sigmer_idx; // sigmer -> index in F[cluster]
         vector<vector<int>> L_data; // #clusters x #transcripts: num (general) sigmers per transcript
-        vector<vector<vector<vector<int>>>> G_data; // #conditions x #clusters x #replicates x #sigmers: transcript id (from transcripts)
+        vector<vector<vector<vector<int>>>> G_data; // #conditions x #clusters x #replicates x #sigmer occurrences: transcript id (from transcripts)
+        vector<vector<vector<vector<int>>>> G_sigmer_idx; // #conditions x #clusters x #replicates x #sigmer occurrences: sigmer idx in F
         vector<vector<vector<double>>> m_data; // #conditions x #clusters x #transcripts: probability that general sigmer belongs to a transcript
         vector<vector<vector<double>>> phi_data; // #conditions x #clusters x #transcripts: phi(Sc m)
         vector<vector<vector<double>>> lf_sampling_data; // #conditions x #clusters x (#Sc + 1): w(m), m = i/Sc
