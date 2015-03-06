@@ -1,0 +1,16 @@
+library("locfit");
+dat <- read.table("rsgibbs_locfit.dat", header=TRUE);
+fit <- locfit::locfit.raw(x=dat$m, y=dat$w, family="gamma", maxk=500);
+result <- predict(fit, dat[,"m"]);
+dat$gamma <- result;
+save(fit, file="locfit.save");
+# fit <- locfit::locfit.raw(x=dat$m, y=dat$w, family="poisson", maxk=500);
+# result <- predict(fit, dat[,"m"]);
+# dat$poisson <- result;
+# fit <- locfit::locfit.raw(x=dat$m, y=dat$w, family="geom", maxk=500);
+# result <- predict(fit, dat[,"m"]);
+# dat$geom <- result;
+# fit <- locfit::locfit.raw(x=dat$m, y=dat$w, family="gaussian", maxk=500);
+# result <- predict(fit, dat[,"m"]);
+# dat$gaussian <- result;
+write.table(dat, file="rsgibbs_locfit.dat", append=FALSE, sep="\t", row.names=FALSE, col.names=TRUE);
