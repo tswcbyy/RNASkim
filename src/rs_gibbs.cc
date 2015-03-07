@@ -193,13 +193,15 @@ namespace rs {
              P(m_t| ...) = product_r (P(theta_r,t | m_t))
              P(theta_r,t | m_t) = choose(theta_r,t + q - 1, theta_r,t) (1-p)^q * p^(theta_rt)
              Normalize m vector; output
-             
+
              */
 
             printf("Gibbs sampling:\n");
             ofstream perf_file;
-            perf_file.open ("rsgibbs_perf.dat", ios::out | ios::trunc);
-            perf_file << "condition\tcluster\tsigmers\ttranscripts\tms\titeration" << endl;
+            if (DEBUG) {
+                perf_file.open ("rsgibbs_perf.dat", ios::out | ios::trunc);
+                perf_file << "condition\tcluster\tsigmers\ttranscripts\tms\titeration" << endl;
+            }
 
             for (int i = 1; i < num_iterations; i++) {
                 if (DEBUG) printf("\t\t%s iteration %i: \n", currentDateTime().c_str(), i);
@@ -222,19 +224,20 @@ namespace rs {
                         threads.at(thr).join();
                     }
 
-                    if (DEBUG) output(ios::out | ios::app, i, condition);
-
-                    for (int cl_idx = 0; cl_idx < (int)cluster_performance.size(); cl_idx++) {
-                        if (cluster_performance[cl_idx] > 0) {
-                            string cluster = cluster_vector[cl_idx];
-                            perf_file << condition << "\t" << cluster << "\t" << F_data[cl_idx].size() << "\t" << cluster_transcripts_map[cluster].size() << "\t" << cluster_performance[cl_idx] << "\t" << i << endl;
+                    if (DEBUG)  {
+                        output(ios::out | ios::app, i, condition);
+                        for (int cl_idx = 0; cl_idx < (int)cluster_performance.size(); cl_idx++) {
+                            if (cluster_performance[cl_idx] > 0) {
+                                string cluster = cluster_vector[cl_idx];
+                                perf_file << condition << "\t" << cluster << "\t" << F_data[cl_idx].size() << "\t" << cluster_transcripts_map[cluster].size() << "\t" << cluster_performance[cl_idx] << "\t" << i << endl;
+                            }
                         }
                     }
                 }
                 
                 if (DEBUG) printf("\tcomplete\n");
             }
-            perf_file.close();
+            if (perf_file.is_open()) perf_file.close();
 
             finalOutput();
         }
@@ -274,10 +277,11 @@ namespace rs {
             std::sort(unprocessed_clusters.begin(), unprocessed_clusters.end(),  s);
             printf("Post sort: unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
 
-            // DEBUG
-            unprocessed_clusters.clear();
-            unprocessed_clusters.push_back(clusters["ENSMUSG00000009112"]);
-            printf("Post debug clear: unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
+            if (DEBUG) { // limit processing to test clusters
+                unprocessed_clusters.clear();
+                unprocessed_clusters.push_back(clusters["ENSMUSG00000009112"]);
+                printf("Post debug clear: unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
+            }
         }
 
         void finalOutput() {
@@ -295,7 +299,7 @@ namespace rs {
 
                 printf("%zu iterations in m_Gibbs\n", m_Gibbs.size());
                 for (int cl_idx = 0; cl_idx < (int)clusters.size(); cl_idx++) {
-                    double Sc = 1; //size_conditions[cond_idx][cl_idx];
+                    double Sc = size_conditions[cond_idx][cl_idx];
                     string cluster = cluster_vector[cl_idx];
                     for (int t_idx = 0; t_idx < (int)cluster_transcripts_map[cluster].size(); t_idx++) {
                         string transcript = cluster_transcripts_map[cluster][t_idx];
@@ -344,21 +348,12 @@ namespace rs {
                 auto end = std::chrono::high_resolution_clock::now();
                 auto dur = end - begin;
 
-                // unthreaded
-                for (int r = 0; r < replicates[cond_idx]; r++) {
-                    processGandTheta(cond_idx, cl_idx, r, thread_idx);
-                }
 
-                // replicate threading
-                /*vector<thread> rep_threads(replicates[cond_idx]);
-                for (int r = 0; r < replicates[cond_idx]; r++) {
-                    rep_threads.at(r) = thread(&GibbsSampler::processGandTheta, this, cond_idx, cl_idx, r, thread_idx);
-                }
-                for (int thr = 0; thr < (int)rep_threads.size(); thr++) {
-                    rep_threads.at(thr).join();
-                }*/
+                if (DEBUG) { // unthreaded
+                    for (int r = 0; r < replicates[cond_idx]; r++) {
+                        processGandTheta(cond_idx, cl_idx, r, thread_idx);
+                    }
 
-                if (DEBUG) {
                     string condition = "";
                     for (auto cond_it : conditions) {
                         if (cond_it.second == cond_idx)
@@ -366,6 +361,14 @@ namespace rs {
                     }
                     outputTheta(ios::out | ios::app, 1, condition, cl_idx);
                     outputG(ios::out | ios::app, condition, cl_idx);
+                } else { // replicate threading
+                    vector<thread> rep_threads(replicates[cond_idx]);
+                    for (int r = 0; r < replicates[cond_idx]; r++) {
+                        rep_threads.at(r) = thread(&GibbsSampler::processGandTheta, this, cond_idx, cl_idx, r, thread_idx);
+                    }
+                    for (int thr = 0; thr < (int)rep_threads.size(); thr++) {
+                        rep_threads.at(thr).join();
+                    }
                 }
 
                 gibbsM(cond_idx, cl_idx);
@@ -1197,7 +1200,7 @@ namespace rs {
             remove(R_filename.c_str());
             end = std::chrono::high_resolution_clock::now();
             dur = end - begin;
-            printf("\t\tLocfit predict on %s [%f ms]\n", data_file.c_str(), (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
+            if (DEBUG) printf("\t\tLocfit predict on %s [%f ms]\n", data_file.c_str(), (double) std::chrono::duration_cast<std::chrono::milliseconds>(dur).count());
 
             return w_values;
         }
@@ -1265,7 +1268,7 @@ namespace rs {
 
                 vector<double> m_probs(max_m);
 
-                printf("Transcript %i, mid %f, initial m = %f\n", t, mid, m[t]);
+                if (DEBUG) printf("Transcript %i, mid %f, initial m = %f\n", t, mid, m[t]);
                 double peak = 0, integral1 = 0, integral2 = 0, peak_m = 0;
                 for (int sz = 1; sz <= (int)m_probs.size(); sz++) {
                     double product = 1;
@@ -1296,7 +1299,7 @@ namespace rs {
                         errno = 0;
                     }
 
-                    printf("\tP(m = %i/%f) = %e\n", sz, Sc, m_probs[sz - 1]);
+                    if (DEBUG) printf("\tP(m = %i/%f) = %e\n", sz, Sc, m_probs[sz - 1]);
 
                     if (m_probs[sz - 1] > peak) {
                         peak_m = sz - 1;
@@ -1308,7 +1311,7 @@ namespace rs {
                 }
 
                 size_t range = std::min(m_probs.size() - peak_m, peak_m);
-                printf("Original m: %f\tPeak(%f): %e\tBefore peak: %e\tAfter peak: %e\tv = %e\tRange = %zu\n", m[t], peak_m, peak, integral1, integral2, v, range);
+                if (DEBUG) printf("Original m: %f\tPeak(%f): %e\tBefore peak: %e\tAfter peak: %e\tv = %e\tRange = %zu\n", m[t], peak_m, peak, integral1, integral2, v, range);
 
                 /* truncate the probability distribution
                 std::fill(m_probs.begin(), m_probs.begin() + peak_m - range, 0);
@@ -1328,18 +1331,20 @@ namespace rs {
 
                 boost::random::discrete_distribution<> distribution(m_probs.begin(), m_probs.end());
                 m[t] = ((double) distribution(generator) + 1.) / Sc;
-                printf("Outcome m: %f\tIntegral1 = %e, Integral2 = %e\n", m[t], integral1, integral2);
+                if (DEBUG) printf("Outcome m: %f\tIntegral1 = %e, Integral2 = %e\n", m[t], integral1, integral2);
             }
 
-            printf("Gibbs outcome:\t");
-            for (double p : m) {
-                printf("%f\t", p);
-            }; printf("\n");
-            normalize(m);
-            printf("Normalized:\t");
-            for (double p : m) {
-                printf("%f\t", p);
-            }; printf("\n");
+            if (DEBUG) {
+                printf("Gibbs outcome:\t");
+                for (double p : m) {
+                    printf("%f\t", p);
+                }; printf("\n");
+                normalize(m);
+                printf("Normalized:\t");
+                for (double p : m) {
+                    printf("%f\t", p);
+                }; printf("\n");
+            }
 
             m_mutex.lock();
             m_data[cond_idx][cl_idx] = m;
