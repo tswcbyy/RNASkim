@@ -19,13 +19,15 @@ RNA-Skim is implemented in C++ (heavily using C++11 standard). Please make sure 
 
 RNA-Skim (rs_gibbs) also requires Boost version 1.47+ to function correctly. If Boost is installed in a custom location, edit the MakeFile INC line and add the following arguments: 
 
-```-I/path/boost_*version* \
+```bash
+-I/path/boost_*version* \
 -L/path/boost_*version*/stage/lib 
 ```
 
 R must be installed on the system with the LOCFIT library installed: 
 
-```> install.packages("locfit")
+```R
+> install.packages("locfit")
 ```
 
 Please run the following commands to compile the executables:
@@ -179,7 +181,8 @@ rs_gibbs
 
 rs_gibbs runs Gibbs sampling on the rs_count and rs_estimate outputs to obtain more estimates of the abundances of transcripts based on occurrences of sig-mers.
 
-```./rs_gibbs -input_file gibbs_input.txt
+```bash
+./rs_gibbs -input_file gibbs_input.txt
 ```
 
 gibbs_input.txt is a sample input file format, where each tab-delimited line represents a single replicate input: condition, cf file, sk file, and em file paths. If DEBUG is turned on, the out/ folder will be populated with running data for F, G, theta, and m vectors, and filterClusters() may be used to limit the number of clusters processed for debugging. 
