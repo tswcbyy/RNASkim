@@ -1,7 +1,7 @@
-RNA-Skim
+Skimdiff
 ========
 
-RNA-Skim: a rapid method for RNA-Seq quantification at transcript level
+Skimdiff: a rapid method for transcript level differential analysis using RNA-Seq data.
 
 Download
 --------
@@ -182,9 +182,21 @@ rs_gibbs
 rs_gibbs runs Gibbs sampling on the rs_count and rs_estimate outputs to obtain more estimates of the abundances of transcripts based on occurrences of sig-mers.
 
 ```bash
-./rs_gibbs -input_file gibbs_input.txt
+../src/rs_gibbs -input_file=gibbs_input.txt
 ```
 
 gibbs_input.txt is a sample input file format, where each tab-delimited line represents a single replicate input: condition, cf file, sk file, and em file paths. If DEBUG is turned on, the out/ folder will be populated with running data for F, G, theta, and m vectors, and filterClusters() may be used to limit the number of clusters processed for debugging. 
 
 The tab-delimited output files will be named `rsgibbs_<condition name>.dat`. 
+
+rs_diff
+--------
+
+rs_diff tests for differential expression for each transcript under two conditions. 
+
+This command tests for differential expression between Gibbs Sampling results in rsgibbs_A.dat and rsgibbs_B.dat with False Discovery Rate = 0.05.
+```bash
+../src/rs_diff -gibbs_file_conditionA=rsgibbs_A.dat -gibbs_file_conditionB=rsgibbs_B.dat -FDR=0.05 > diff
+```
+
+There are 8 columns in tab-delimited diff file: transcript_id, mean_conditionA, variance_conditionA, mean_conditionB, variance_conditionB, p_value, adjusted_p_value, is_significant.
