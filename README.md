@@ -187,7 +187,7 @@ rs_gibbs runs Gibbs sampling on the rs_count and rs_estimate outputs to obtain m
 
 gibbs_input.txt is a sample input file format, where each tab-delimited line represents a single replicate input: condition, cf file, sk file, and em file paths. If DEBUG is turned on, the out/ folder will be populated with running data for F, G, theta, and m vectors, and filterClusters() may be used to limit the number of clusters processed for debugging. 
 
-The tab-delimited output files will be named `rsgibbs_<condition name>.dat`. 
+The tab-delimited output files will be named `rsgibbs_<condition name>.dat`. There are 5 columns in this file: transcript id, mean expression level among replicates, variance of the expression level, 2.5th percentile of mean expression level, 97.5th percentile of mean expression level.
 
 rs_diff
 --------
@@ -199,4 +199,4 @@ This command tests for differential expression between Gibbs Sampling results in
 ../src/rs_diff -gibbs_file_conditionA=rsgibbs_A.dat -gibbs_file_conditionB=rsgibbs_B.dat -FDR=0.05 > diff
 ```
 
-There are 8 columns in tab-delimited diff file: transcript_id, mean_conditionA, variance_conditionA, mean_conditionB, variance_conditionB, p_value, adjusted_p_value, is_significant.
+There are 8 columns in tab-delimited diff file: transcript id, mean of condition A, variance of condition A, mean of condition B, variance of conditionB, p value, adjusted p value, whether it is significantly differential expressed.
