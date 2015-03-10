@@ -287,16 +287,16 @@ namespace rs {
         }
 
         void finalOutput() {
-            vector<double> m_mean;
-            vector<double> m_5;
-            vector<double> m_95;
-            vector<string> transcript_list;
-
             for (auto cond_it : conditions) {
                 string condition = cond_it.first;
                 int cond_idx = cond_it.second;
 
                 printf("Final output for condition %s\n", condition.c_str());
+
+                vector<double> m_mean;
+                vector<double> m_5;
+                vector<double> m_95;
+                vector<string> transcript_list;
 
                 printf("%zu iterations in m_Gibbs\n", m_Gibbs.size());
                 for (auto cl_it : clusters) {
@@ -307,18 +307,19 @@ namespace rs {
                         transcript_list.push_back(transcript);
 
                         vector<double> m;
+                        double Sc = size_conditions[cond_idx][cl_idx];
                         for (int i = 0; i < (int)m_Gibbs.size(); i++) {
                             m.push_back(m_Gibbs[i][cond_idx][cl_idx][t_idx]);
                         }
 
-                        m_mean.push_back(size_conditions[cond_idx][cl_idx] * std::accumulate(m.begin(), m.end(), 0.0) / (double) m.size()); // m_mean = Sc * m
+                        m_mean.push_back(Sc * std::accumulate(m.begin(), m.end(), 0.0) / (double) m.size()); // m_mean = Sc * m
 
                         size_t fifth_percent = 0.05 * m.size();
                         std::nth_element(m.begin(), m.begin() + fifth_percent, m.end(), std::less<double>());
-                        m_5.push_back(m[fifth_percent]);
+                        m_5.push_back(Sc * m[fifth_percent]);
 
                         std::nth_element(m.begin(), m.begin() + fifth_percent, m.end(), std::greater<double>());
-                        m_95.push_back(m[fifth_percent]);
+                        m_95.push_back(Sc * m[fifth_percent]);
                     }
                 }
 
