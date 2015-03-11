@@ -41,6 +41,7 @@ using std::ios;
 using std::stringstream;
 using std::find;
 using std::thread;
+using std::tuple;
 
 DEFINE_string(input_file, "", "Text file containing all input files (tab-delimited) with 3 columns: condition name, .cf file, _em file");
 
@@ -124,13 +125,13 @@ namespace rs {
             }
 
             transcripts.clear(); // not needed after parseSKData
-
             for (auto cond_it : conditions) {
                 for (int r = 0; r < replicates[cond_it.second]; r++) {
                     parseCFData(cf_files[cond_it.second][r], cond_it.second, r);
                 }
             }
             if (DEBUG) printf("CF data: complete\n");
+            F_sigmer_idx.clear();
 
             // size_replicates, size_conditions
             calcSizeFactors();
@@ -147,29 +148,23 @@ namespace rs {
                 }
             }
 
-            // find max SrSc and calc +5 for ln_factorials
-            size_t max_size = 0;
-            for (size_t c = 0; c < size_conditions.size(); c++) {
-                for (size_t r = 0; r < size_replicates[c].size(); r++) {
-                    double max_Sc = *std::max_element(size_conditions[c].begin(), size_conditions[c].end());
-                    max_size = std::max((size_t)round(max_Sc * size_replicates[c][r]), max_size);
-                }
-            }
-            if (DEBUG) printf("Maximum SrSc = %zu\n", max_size);
-            ln_factorials.resize(1, 0); // initialize ln(0!)
-            calcLogFactorials(max_size * 2);
-            if (DEBUG) printf("Initialized ln(n!) up to ln(%zu!) = %f\n", ln_factorials.size() - 1, ln_factorials[ln_factorials.size() - 1]);
-
-
             // m_data: first divide the theta vector for each replicate by its size factor. Then take average of all the replicates for one condition. Finally normalize it.
             initMData();
             if (DEBUG) printf("initMData: complete\n");
+
+            calcMVariance();
+            printf("calcMVariance: complete\n");
+
             cout << currentDateTime() << "\tfilterClusters:" << endl;
             filterClusters();
             cout << currentDateTime() << "\tFiltering complete: clusters to be processed: " << unprocessed_clusters.size() << endl;
 
 
-            if (DEBUG) outputF();
+            if (DEBUG) {
+                outputF();
+                F_sigmers.clear();
+            }
+
             for (auto cond_it : conditions) {
                 printf("Printing initial outputs for condition %s\n", cond_it.first.c_str());
                 output(ios::out | ios::trunc, 0, cond_it.first);
@@ -181,9 +176,18 @@ namespace rs {
                 }
             }
 
-
-            calcMVariance();
-            printf("calcMVariance: complete\n");
+            // find max SrSc and calc +5 for ln_factorials
+            size_t max_size = 0;
+            for (size_t c = 0; c < size_conditions.size(); c++) {
+                for (size_t r = 0; r < size_replicates[c].size(); r++) {
+                    double max_Sc = *std::max_element(size_conditions[c].begin(), size_conditions[c].end());
+                    max_size = std::max((size_t)round(max_Sc * size_replicates[c][r]), max_size);
+                }
+            }
+            if (DEBUG) printf("Maximum SrSc = %zu\n", max_size);
+            ln_factorials.resize(1, 0); // initialize ln(0!)
+            calcLogFactorials(max_size * 2);
+            printf("Initialized ln(n!) up to ln(%zu!) = %f\n", ln_factorials.size() - 1, ln_factorials[ln_factorials.size() - 1]);
 
             /* Gibbs:
              1) For each cluster c, for each replicate r, for each sigmer occurrence s: re-sample G (transcript)
@@ -200,6 +204,7 @@ namespace rs {
              Normalize m vector; output
 
              */
+
 
             printf("Gibbs sampling:\n");
             ofstream perf_file;
@@ -234,7 +239,7 @@ namespace rs {
                         for (int cl_idx = 0; cl_idx < (int)cluster_performance.size(); cl_idx++) {
                             if (cluster_performance[cl_idx] > 0) {
                                 string cluster = cluster_vector[cl_idx];
-                                perf_file << condition << "\t" << cluster << "\t" << F_data[cl_idx].size() << "\t" << cluster_transcripts_map[cluster].size() << "\t" << cluster_performance[cl_idx] << "\t" << i << endl;
+                                perf_file << condition << "\t" << cluster << "\t" << F_compressed_data[cl_idx].size() << "\t" << cluster_transcripts_map[cluster].size() << "\t" << cluster_performance[cl_idx] << "\t" << i << endl;
                             }
                         }
                     }
@@ -243,6 +248,11 @@ namespace rs {
                 if (DEBUG) printf("\tcomplete\n");
             }
             if (perf_file.is_open()) perf_file.close();
+
+            ln_factorials.clear();
+            theta_data.clear();
+            G_data.clear();
+            m_data.clear();
 
             finalOutput();
         }
@@ -279,11 +289,11 @@ namespace rs {
             printf("Post sort: unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
 
             // limit processing to test clusters
-            /*if (DEBUG) {
+            if (DEBUG) {
                 unprocessed_clusters.clear();
                 unprocessed_clusters.push_back(clusters["ENSMUSG00000009112"]);
                 printf("Post debug clear: unprocessed_clusters size: %zu\n", unprocessed_clusters.size());
-            }*/
+            }
         }
 
         void finalOutput() {
@@ -650,8 +660,10 @@ namespace rs {
             std::uniform_real_distribution<double> distribution(0.0,1.0);
 
             L_data.resize(clusters.size());
-            F_data.resize(clusters.size());
-            F_sigmers.resize(clusters.size());
+            //F_data.resize(clusters.size());
+            F_compressed_data.resize(clusters.size());
+
+            if (DEBUG) F_sigmers.resize(clusters.size());
 
             if (DEBUG) printf("Reading file for F matrix: %s\n", file_name.c_str());
             fstream istream(file_name, ios::in | ios::binary);
@@ -678,6 +690,7 @@ namespace rs {
                 int cl_idx = clusters[cluster];
 
                 vector<vector<int>> F_cluster_data;
+                vector<vector<tuple<int, int>>> F_compressed_cluster_data;
                 vector<string> F_cluster_sigmer;
                 vector<int> L_cluster_data(num_transcripts, 0);
 
@@ -693,6 +706,7 @@ namespace rs {
                 for (int s = 0; s < sk.keys_size(); s++) {
                     // create vector -- size = num_transcripts per cluster, each entry is number of times a sigmer appears in the transcript
                     vector<int> F_sigmer_data(num_transcripts, 0);
+                    vector<tuple<int, int>> F_compressed_sigmer_data;
 
                     if (sampling_factor != 0) {
                         double sample = distribution(generator);
@@ -711,10 +725,16 @@ namespace rs {
                         assert(transcripts.find(transcript) != transcripts.end());
                         int t_idx = transcripts[transcript];
                         int sigmer_count = sk.keys(s).transcript_infos(t).positions_size();
+
                         F_sigmer_data[t_idx] = sigmer_count;
                         L_cluster_data[t_idx] += sigmer_count;
+
+                        if (sigmer_count > 0) {
+                            F_compressed_sigmer_data.push_back(std::make_tuple(t_idx, sigmer_count));
+                        }
                     }
                     F_cluster_data.push_back(F_sigmer_data);
+                    F_compressed_cluster_data.push_back(F_compressed_sigmer_data);
                 }
 
                 if (sampling_factor != 0.) {
@@ -726,9 +746,10 @@ namespace rs {
                     }
                 }
 
-                F_data[cl_idx] = F_cluster_data;
+                // F_data[cl_idx] = F_cluster_data;
                 L_data[cl_idx] = L_cluster_data;
-                F_sigmers[cl_idx] = F_cluster_sigmer;
+                if (DEBUG) F_sigmers[cl_idx] = F_cluster_sigmer;
+                F_compressed_data[cl_idx] = F_compressed_cluster_data;
             }
         }
 
@@ -843,20 +864,6 @@ namespace rs {
                 string condition = cond_it.first;
                 vector<double> w_condition;
                 vector<double> mw_condition;
-                vector<vector<double>> phi_condition(clusters.size());
-                vector<vector<double>> v_sampling_condition(clusters.size());
-
-                for (auto cl_it : cluster_transcripts_map) {
-                    size_t num_transcripts = cl_it.second.size();
-                    string cluster = cl_it.first;
-                    int cl_idx = clusters[cluster];
-
-                    vector<double> phi_cluster(num_transcripts, 0);
-                    phi_condition[cl_idx] = phi_cluster;
-
-                    vector<double> v_sampling_cluster;
-                    v_sampling_condition[cl_idx] = v_sampling_cluster;
-                }
 
                 w_condition.push_back(0);
                 mw_condition.push_back(0);
@@ -944,6 +951,21 @@ namespace rs {
                     lffile.open (lffile_name, ios::out | ios::trunc);
                     lffile << "Sr\tSc\tm\tz\tcluster\ttranscript\tlocfit\tv\tp\tq" << endl;
                     lffile.precision(20);
+                }
+
+                vector<vector<double>> phi_condition(clusters.size());
+                vector<vector<double>> v_sampling_condition(clusters.size());
+
+                for (auto cl_it : cluster_transcripts_map) {
+                    size_t num_transcripts = cl_it.second.size();
+                    string cluster = cl_it.first;
+                    int cl_idx = clusters[cluster];
+
+                    vector<double> phi_cluster(num_transcripts, 0);
+                    phi_condition[cl_idx] = phi_cluster;
+
+                    vector<double> v_sampling_cluster;
+                    v_sampling_condition[cl_idx] = v_sampling_cluster;
                 }
 
                 for (auto cl_it : clusters) {
@@ -1068,7 +1090,8 @@ namespace rs {
             // initializations
             vector<int> G = G_data[cond_idx][cl_idx][r]; // #sigmers: transcript id (from transcripts)
             vector<int> theta = theta_data[cond_idx][cl_idx][r]; // #transcripts: occurrences of (general) sigmers per transcript
-            vector<vector<int>> F = F_data[cl_idx]; // #sigmers x #transcripts
+            //vector<vector<int>> F = F_data[cl_idx]; // #sigmers x #transcripts
+            vector<vector<tuple<int, int>>> F_c = F_compressed_data[cl_idx]; // #sigmers x list x <t_idx, count>
             vector<int> L = L_data[cl_idx]; // #transcripts
 
             if (G.size() == 0) return;
@@ -1080,12 +1103,22 @@ namespace rs {
 
                 map<int, int> m_t; // distrib value -> t
                 // choose random t from distribution over all t: theta[r][t] * F[s][t] / L[t]
+                for (auto tup : F_c[s_idx]) {
+                    int t_idx = std::get<0>(tup);
+                    int f = std::get<1>(tup);
+
+                    if (L[t_idx] != 0 && theta[t_idx] != 0) {
+                        m_t[G_probs.size()] = t_idx;
+                        G_probs.push_back((double)theta[t_idx] * (double) f / (double) L[t_idx]);
+                    }
+                }
+                /*
                 for (int t = 0; t < (int)theta.size(); t++) {
                     if (L[t] != 0 && theta[t] != 0 && F[s_idx][t] !=0) {
                         m_t[G_probs.size()] = t;
                         G_probs.push_back((double)theta[t] * (double)F[s_idx][t] / (double)L[t]);
                     }
-                }
+                }*/
 
                 double prob_sum = std::accumulate(G_probs.begin(), G_probs.end(), 0.0);
                 if (prob_sum == 0) {
@@ -1428,7 +1461,7 @@ namespace rs {
                     string cluster = cluster_vector[cl_idx];
 
                     ofstream m_file;
-                    string file_name = "out/m_" + condition + "." + std::to_string(cl_idx) + ".dat";
+                    string file_name = "out/m_" + condition + "." + cluster.c_str() + ".dat";
                     m_file.open (file_name.c_str(), mode);
 
                     // print header line
@@ -1494,15 +1527,24 @@ namespace rs {
                 string file_name = "out/F_" + cluster + ".dat";
                 f_file.open (file_name.c_str(), ios::out | ios::trunc);
 
-                for (size_t t = 0; t < cluster_transcripts_map[cluster].size(); t++) {
-                    f_file << "\t" << cluster_transcripts_map[cluster][t];
+                size_t num_transcripts = cluster_transcripts_map[cluster].size();
+
+                for (size_t t = 0; t < num_transcripts; t++) {
+                    f_file << cluster_transcripts_map[cluster][t] <<  "\t";
                 }
                 f_file << endl;
 
-                for (size_t s = 0; s < F_data[cl_idx].size(); s++) {
-                    f_file << F_sigmers[cl_idx][s] << "\t";
-                    for (size_t t = 0; t < F_data[cl_idx][s].size(); t++) {
-                        f_file << F_data[cl_idx][s][t] << "\t";
+                for (size_t s = 0; s < F_compressed_data[cl_idx].size(); s++) {
+                    int i = 0;
+
+                    for (size_t t = 0; t < num_transcripts; t++) {
+                        auto tup = F_compressed_data[cl_idx][s][i];
+                        if (std::get<0>(tup) == (int)t) {
+                            f_file << std::get<1>(tup) << "\t";
+                        } else {
+                            f_file << "0\t";
+                        }
+                        i++;
                     }
                     f_file << endl;
                 }
@@ -1657,6 +1699,9 @@ namespace rs {
         vector<vector<vector<int>>> F_data; // #clusters x #sigmers x #transcripts: num (specific) sigmer per transcript
         vector<vector<string>> F_sigmers; // #clusters x #sigmers: sigmers
         map<string, int> F_sigmer_idx; // sigmer -> index in F[cluster]
+
+        vector<vector<vector<tuple<int, int>>>> F_compressed_data; // #clusters x #sigmers x list x <t_idx, number>
+
         vector<vector<int>> L_data; // #clusters x #transcripts: num (general) sigmers per transcript
         vector<vector<vector<vector<int>>>> G_data; // #conditions x #clusters x #replicates x #sigmer occurrences: transcript id (from transcripts)
         vector<vector<vector<vector<int>>>> G_sigmer_idx; // #conditions x #clusters x #replicates x #sigmer occurrences: sigmer idx in F
@@ -1664,7 +1709,6 @@ namespace rs {
         vector<vector<vector<double>>> phi_data; // #conditions x #clusters x #transcripts: phi(Sc m)
         vector<vector<vector<double>>> lf_sampling_data; // #conditions x #clusters x (#Sc + 1): w(m), m = i/Sc
         vector<vector<vector<vector<double>>>> m_Gibbs; // 1000 x #conditions x #clusters x #transcripts: m data over all 1000 iterations
-        vector<vector<vector<vector<vector<double>>>>> theta_P_data; // P(theta | m) #conditions x #replicates x #clusters x #transcripts x #SrSc based on m_data
 
         vector<vector<double>> size_replicates; // #conditions x #replicates
         vector<vector<double>> size_conditions; // #conditions x #clusters
