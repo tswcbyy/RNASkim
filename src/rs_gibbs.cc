@@ -314,7 +314,7 @@ namespace rs {
 
                         m_mean.push_back(Sc * std::accumulate(m.begin(), m.end(), 0.0) / (double) m.size()); // m_mean = Sc * m
 
-                        size_t fifth_percent = 0.05 * m.size();
+                        size_t fifth_percent = 0.025 * m.size();
                         std::nth_element(m.begin(), m.begin() + fifth_percent, m.end(), std::less<double>());
                         m_5.push_back(Sc * m[fifth_percent]);
 
@@ -1202,11 +1202,10 @@ namespace rs {
             auto begin = std::chrono::high_resolution_clock::now();
             auto end = std::chrono::high_resolution_clock::now();
             auto dur = end - begin;
-            string cluster = cluster_vector[cl_idx];
 
             // write R file to calc new v vals
             ofstream ofile;
-            string R_filename = std::to_string(cond_idx) + "_" + cluster + ".R";
+            string R_filename = std::to_string(cond_idx) + "_" + std::to_string(cl_idx) + ".R";
             ofile.open (R_filename, ios::out | ios::trunc);
             ofile << "library(\"locfit\");" << endl;
             ofile << "load(\"" << condition << ".save\");" << endl;
@@ -1246,7 +1245,7 @@ namespace rs {
 
         void gibbsM(int cond_idx, int cl_idx) {
             if (size_conditions[cond_idx][cl_idx] == 0) {
-                printf("WARNING: Skipping cluster %i:%s due to Sc = 0 for condition [%i]\n", cl_idx, cluster_vector[cl_idx].c_str(), cond_idx);
+                printf("WARNING: Skipping cluster %i due to Sc = 0 for condition [%i]\n", cl_idx, cond_idx);
                 return;
             }
 
@@ -1390,7 +1389,7 @@ namespace rs {
             m_mutex.unlock();
 
             // set variance values for m
-            m_filename = cluster_vector[cl_idx] + ".dat";
+            m_filename = std::to_string(cond_idx) + "_" + std::to_string(cl_idx) + ".dat";
             m_file.open (m_filename, ios::out | ios::trunc);
             m_file << "m" << endl;
             for (double m_val : m) {
@@ -1429,7 +1428,7 @@ namespace rs {
                     string cluster = cluster_vector[cl_idx];
 
                     ofstream m_file;
-                    string file_name = "out/m_" + condition + "." + cluster + ".dat";
+                    string file_name = "out/m_" + condition + "." + std::to_string(cl_idx) + ".dat";
                     m_file.open (file_name.c_str(), mode);
 
                     // print header line
