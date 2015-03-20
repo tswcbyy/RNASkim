@@ -82,7 +82,7 @@ private:
     double varianceB;
     double p_value;
     double adjusted_p;
-    bool is_significant;
+    bool is_significant; // whether this transcript is considered as differentially expressed
 };
 
 // split a string s seperated by delim into a vector of tokens
@@ -118,19 +118,25 @@ void read_gibbs_result(vector<transcript*>& trans, string gibbs_fileA, string gi
     }
 }
 
+
+// calculate p value for transcript t under two conditions
 void calc_p_value(transcript* t){
     double meanA = t->get_meanA();
     double varianceA = t->get_varianceA();
     double meanB = t->get_meanB();
     double varianceB = t->get_varianceB();
     
+    // if it's not expressed in both conditions, it's not differential expressed, p value = 1.
     if (meanA == 0 && meanB == 0){
         t->set_p_value(1);
     }
+    // if it's expressed in both conditions, use t test.
     if (meanA != 0 && meanB != 0){
         double t_value = (log(meanA) - log(meanB))/sqrt(varianceA/(meanA*meanA) + varianceB/(meanB*meanB));
         t->set_p_value(erfc(abs(t_value)/sqrt(2)));
     }
+    // if it's expressed in only one condition,
+    // a one-sided test is performed using the posterior distribution of the expressed transcript.
     if (meanA == 0 && meanB != 0){
         double p_comp = meanB/varianceB;
         double r = meanB*meanB/(varianceB-meanB);
@@ -143,10 +149,15 @@ void calc_p_value(transcript* t){
     }
 }
 
+// compare the p value of two transcripts
+// return true if the p value of transcript a is smaller than p value of b
 bool comp_trans(transcript* a, transcript* b){
     return (a->get_p_value() < b->get_p_value());
 }
 
+// multiple testing using Benjamini and Hochberg
+// adjusted p value is calculated
+// transcripts with adjusted p value < FDR is set to be differentially expressed.
 void multiple_testing(vector<transcript*> trans, double FDR){
     sort(trans.begin(), trans.end(), comp_trans);
     int size = trans.size();
