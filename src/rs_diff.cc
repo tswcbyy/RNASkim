@@ -85,6 +85,7 @@ private:
     bool is_significant;
 };
 
+// split a string s seperated by delim into a vector of tokens
 vector<string> split(const string &s, char delim) {
     vector<string> elems;
     stringstream ss(s);
@@ -95,6 +96,8 @@ vector<string> split(const string &s, char delim) {
     return elems;
 }
 
+// read results from gibbs sampling. 
+// Gibbs sampling result for condition A is in gibbs_fileA and Gibbs sampling result for condition B is in gibbs_fileB.
 void read_gibbs_result(vector<transcript*>& trans, string gibbs_fileA, string gibbs_fileB){
     fstream istreamA(gibbs_fileA, ios::in);
     fstream istreamB(gibbs_fileB, ios::in);
@@ -113,10 +116,6 @@ void read_gibbs_result(vector<transcript*>& trans, string gibbs_fileA, string gi
                                        atof(tokensB[1].c_str()), atof(tokensB[2].c_str()));
         trans.push_back(t);
     }
-//    trans.push_back(new transcript("test", 0, 0, 0, 0));
-//    trans.push_back(new transcript("test1", 10, 50, 0, 0));
-//    trans.push_back(new transcript("test2", 0, 0, 10, 50));
-//    trans.push_back(new transcript("test3", 10, 50, 11, 60));
 }
 
 void calc_p_value(transcript* t){
