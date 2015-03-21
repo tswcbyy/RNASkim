@@ -58,37 +58,37 @@ namespace rs{
   }
 
   double weight_of_kmer(int length, vector<int> positions) {
-    double weight = 0;
+  //  double weight = 0;
     // why 150? this is a rough estimation, and I am not sure what
     // is the best value. Only a half part of the read will cover
     // the beginning or the end of the transcript.
-    int fragment_length = 180;
-    int read_length = 95;
+  //  int fragment_length = 180;
+  //  int read_length = 95;
     // total number of ways to cover a kmer (left side and right side
     // fragment)
-    int total_num_ways = (read_length - FLAGS_rs_length + 1) * 2;
-    for (int pos : positions) {
+  //  int total_num_ways = (read_length - FLAGS_rs_length + 1) * 2;
+  //  for (int pos : positions) {
       // the number of ways that the kmer is covered by the left read
       // in the fragment
-      int w = left_possible_locations(length, fragment_length,
-                                      read_length, pos);
+  //    int w = left_possible_locations(length, fragment_length,
+  //                                    read_length, pos);
       // the number of ways that the kmer is covered by the right read
       // in the fragment. (just need to reverse the position)
-      w += left_possible_locations(length, fragment_length,
-                                   read_length, length - pos - 1);
-      if (w < 0) {
-        LOG(ERROR) << length << ' ' << pos;
-        LOG(ERROR) << w;
-      }
-      if ( w < 1) {
-        w = 1;
-      }
-      weight += w;
-    }
-    weight /= positions.size();
+  //    w += left_possible_locations(length, fragment_length,
+  //                                 read_length, length - pos - 1);
+  //    if (w < 0) {
+  //      LOG(ERROR) << length << ' ' << pos;
+  //      LOG(ERROR) << w;
+  //    }
+  //    if ( w < 1) {
+  //      w = 1;
+  //    }
+  //    weight += w;
+  //  }
+  //  weight /= positions.size();
     return positions.size();
-    return 1;
-    return weight / total_num_ways;
+  //  return 1;
+  //  return weight / total_num_ways;
   }
 
   vector<vector<int> > find_covered_transcript(const SignatureInfoDB& db,
