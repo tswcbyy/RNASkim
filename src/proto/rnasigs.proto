@@ -55,6 +55,8 @@ message SelectedKey {
   // transcript idx in transcript signatures, this may be repeated.
   message Key {
     message TranscriptInfo {
+      // tidx is the index for SelectedKey.tids, 
+      // e.g, for a tidx value in a specific Key, SelectedKey.tids[tidx] is the transcript id that contains the key.
       required int32 tidx = 1;
       // position in the transcript, this has the same length with tidx
       repeated int32 positions = 2;
