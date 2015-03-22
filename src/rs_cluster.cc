@@ -1,3 +1,5 @@
+// TODO: the last transcript is always read twice and clustered into two clusters.
+
 #include <string>
 #include <vector>
 #include <thread>
