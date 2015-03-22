@@ -66,8 +66,6 @@ public:
     while (reader_->read(&ids, &seqs) != 0) {
       for (size_t i = 0; i < ids.size(); i++) {
         string whole_seq = seqs[i];
-        // TODO(zzj): memory leak, need to figure out why it crashes
-        // when the whole_seq size is huge (e.g. 17M)
         RSBloom *rsb = new RSBloom(whole_seq.size() * 4, 0.001);
         vector<string> seqs = split_seq(whole_seq, '|');
         for (auto& seq : seqs) {
