@@ -76,7 +76,7 @@ void load_records(const string& filename, vector<FastaRecord> *records) {
       ids.erase(ids.begin());
       fr.seqs = seqs;
       fr.tids = ids;
-      fr.bloom_filter = new RSBloom(whole_seq.size() * 4, 0.001);
+      fr.bloom_filter = new RSBloom(whole_seq.size() * 4, 0.001); // 0.001 is the false positive rate
       for (const string& seq : fr.seqs) {
         // add four different possible sequences into bloom
         // normal
